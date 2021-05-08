@@ -1,4 +1,4 @@
-package main
+package marmot
 
 import (
 	"database/sql"
@@ -106,6 +106,10 @@ func (albums *Albums) decideNewLocation() {
 		
 		oldLocation := album.mediaFolder.folderPath
 
+		newLocation := oldLocation + `_x`
+
+		log.Printf("Xq %s, %s", oldLocation, newLocation)
+
 		/*
 		 things to fix....
 
@@ -116,9 +120,11 @@ func (albums *Albums) decideNewLocation() {
 		  subdirectory
 
 		*/
-
 		
 	}
+
+	log.Printf("Flarp %d, %d", correct, problematic)
+
 }
 
 func (albums *Albums) makeIdList() string {
