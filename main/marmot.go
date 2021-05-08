@@ -1,9 +1,7 @@
 package main
 
 import (
-	"math"
-
-	m "davidhancock.com/marmot"
+	m "davidhancock.com/marmot/marmot"
 )
 
 func main() {
@@ -11,4 +9,5 @@ func main() {
 	m.ParseArguments() // guarantees that arguments are acceptable
 	
 	m.GoForIt()
+
 }

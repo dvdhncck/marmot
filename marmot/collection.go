@@ -9,61 +9,15 @@ import (
 	"strings"
 )
 
-type MediaFolder struct {
-	archiveName string
-	mountPoint  string
-	rootPath    string
-	folderPath  string
-}
-
-func (mf *MediaFolder) toJson() string {
-	return fmt.Sprintf("[\"%s/%s/%s\"]",
-		mf.mountPoint, mf.rootPath, mf.folderPath)
-}
-
-type Album struct {
-	id          string
-	name        string
-	mediaFolder *MediaFolder
-	location    string          // this is where we will migrate it to
-	sortAs      string
-	artists     []*Artist
-	genres      []string
-}
-
-func (album *Album) toJson() string {
-	artists := []string{}
-	for _, artist := range album.artists {
-		artists = append(artists, artist.toJson())
-	}
-	genres := []string{}
-	for _, genre := range album.genres {
-		genres = append(genres, fmt.Sprintf("\"%s\"", genre))
-	}
-	return fmt.Sprintf("{ id: \"%s\",\n  name: \"%s\",\n  location: %s,\n  sortAs: \"%s\",\n  genres: [%s]\n  artists: [%s]\n}",
-		album.id, album.name, album.mediaFolder.toJson(), album.sortAs, strings.Join(genres, `,`), strings.Join(artists, `,`))
-}
-
-type Artist struct {
-	id     string
-	name   string
-	sortAs string
-}
-
-func (artist *Artist) toJson() string {
-	return fmt.Sprintf("\n  { id: \"%s\",\n    name: \"%s\",\n    sortAs: \"%s\"\n  }",
-		artist.id, artist.name, artist.sortAs)
-}
-
-type Albums struct {
+type Collection struct {
 	lookup map[string]*Album
 }
 
-func (albums *Albums) getById(id string) *Album {
-	return albums.lookup[id]
+func (collection *Collection) getById(id string) *Album {
+	return collection.lookup[id]
 }
 
-func (albums *Albums) retrieve(db *sql.DB, filter string) int {
+func (collection *Collection) retrieve(db *sql.DB, filter string) int {
 	//results, err := db.Query("SELECT ID, Name, SortAs FROM Album WHERE ID=336")
 	//results, err := db.Query("SELECT ID, Name, SortAs FROM Album LIMIT 10")
 	results, err := db.Query("SELECT ID, Name, SortAs FROM Album")
@@ -71,8 +25,8 @@ func (albums *Albums) retrieve(db *sql.DB, filter string) int {
 		panic(err.Error())
 	}
 	count := 0
-	if albums.lookup == nil {
-		albums.lookup = make(map[string]*Album)
+	if collection.lookup == nil {
+		collection.lookup = make(map[string]*Album)
 	}
 	for results.Next() {
 		var album Album
@@ -82,13 +36,13 @@ func (albums *Albums) retrieve(db *sql.DB, filter string) int {
 			panic(err.Error())
 		}
 		count++
-		albums.lookup[album.id] = &album
+		collection.lookup[album.id] = &album
 	}
 	return count
 }
 
-func (albums *Albums) validate() {
-	for _, album := range albums.lookup {
+func (collection *Collection) validate() {
+	for _, album := range collection.lookup {
 		if len(album.artists) == 0 {
 		 	log.Printf("Album %s missing artist(s)", album.id)
 		}
@@ -98,47 +52,18 @@ func (albums *Albums) validate() {
 	}
 }
 
-func (albums *Albums) decideNewLocation() {
-	correct := 0
-	problematic := 0
-
-	for _, album := range albums.lookup {
-		
-		oldLocation := album.mediaFolder.folderPath
-
-		newLocation := oldLocation + `_x`
-
-		log.Printf("Xq %s, %s", oldLocation, newLocation)
-
-		/*
-		 things to fix....
-
-		  leading /
-
-		  upper case
-
-		  subdirectory
-
-		*/
-		
-	}
-
-	log.Printf("Flarp %d, %d", correct, problematic)
-
-}
-
-func (albums *Albums) makeIdList() string {
-	keys := make([]string, len(albums.lookup))
+func (collection *Collection) makeIdList() string {
+	keys := make([]string, len(collection.lookup))
 	i := 0
-	for k, _ := range albums.lookup {
+	for k := range collection.lookup {
 		keys[i] = k
 		i++
 	}
 	return `(` + strings.Join(keys, ",") + `)`
 }
 
-func (albums *Albums) getMediaFolders(db *sql.DB) int {
-	albumIdList := albums.makeIdList()
+func (collection *Collection) getMediaFolders(db *sql.DB) int {
+	albumIdList := collection.makeIdList()
 	results, err := db.Query("SELECT AlbumID, ArchiveName, MountPoint, RootPath, FolderPath FROM MediaFolder WHERE MediaType=1 AND AlbumID IN " + albumIdList)
 	if err != nil {
 		panic(err.Error())
@@ -160,7 +85,7 @@ func (albums *Albums) getMediaFolders(db *sql.DB) int {
 			panic(err.Error())
 		}
 
-		album := albums.getById(albumId)
+		album := collection.getById(albumId)
 		if album == nil {
 			panic(err.Error())
 		}
@@ -176,8 +101,8 @@ func (albums *Albums) getMediaFolders(db *sql.DB) int {
 	return count
 }
 
-func (albums *Albums) getArtists(db *sql.DB) int {
-	albumIdList := albums.makeIdList()
+func (collection *Collection) getArtists(db *sql.DB) int {
+	albumIdList := collection.makeIdList()
 	results, err := db.Query("SELECT AlbumID, ID, Name, SortAs FROM AlbumArtist aa JOIN Artist a ON a.ID=aa.ArtistID AND aa.AlbumID IN " + albumIdList)
 	if err != nil {
 		panic(err.Error())
@@ -208,7 +133,7 @@ func (albums *Albums) getArtists(db *sql.DB) int {
 				artists[artistId.String] = artist
 			}
 
-			album := albums.getById(albumId)
+			album := collection.getById(albumId)
 			if album == nil {
 				//panic(err.Error())
 				log.Printf("Album %s doesnt exist, but has an artist", albumId)
@@ -225,8 +150,8 @@ func (albums *Albums) getArtists(db *sql.DB) int {
 	return count
 }
 
-func (albums *Albums) getGenres(db *sql.DB) int {
-	albumIdList := albums.makeIdList()
+func (collection *Collection) getGenres(db *sql.DB) int {
+	albumIdList := collection.makeIdList()
 	results, err := db.Query("SELECT AlbumID, GenreID, Name FROM AlbumGenre ag JOIN Genre g ON g.ID=ag.GenreID AND ag.AlbumID IN " + albumIdList)
 	if err != nil {
 		panic(err.Error())
@@ -245,7 +170,7 @@ func (albums *Albums) getGenres(db *sql.DB) int {
 		}
 
 		if genreId.Valid {
-			album := albums.getById(albumId)
+			album := collection.getById(albumId)
 			if album == nil {
 				//panic(err.Error())
 				log.Printf("Album %s doesnt exist, but has a genre", albumId)
@@ -264,7 +189,7 @@ func (albums *Albums) getGenres(db *sql.DB) int {
 	return count
 }
 
-func (albums *Albums) writeToJson(filename string) {
+func (collection *Collection) writeToJson(filename string) {
 	file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		panic(err.Error())
@@ -272,30 +197,9 @@ func (albums *Albums) writeToJson(filename string) {
 
 	defer file.Close()
 	delimiter := "{\n"
-	for _, album := range albums.lookup {
+	for _, album := range collection.lookup {
 		fmt.Fprintf(file, "%s%s", delimiter, album.toJson())
 		delimiter = ",\n"
 	}
 	fmt.Fprintf(file, "} /*x*/\n")
-}
-
-func main() {
-	db, err := sql.Open("mysql", "dave:dave@tcp(127.0.0.1:3306)/marmot")
-
-	if err != nil {
-		panic(err.Error())
-	}
-
-	defer db.Close()
-
-	albums := Albums{}
-
-	count := albums.retrieve(db, `WHERE NAME LIKE '%Hotel%'`)
-	albums.getMediaFolders(db)
-	albums.getArtists(db)
-	albums.getGenres(db)
-	albums.validate()
-	albums.writeToJson(`test.json`)
-
-	log.Printf("Scanned %d albums", count)
 }
