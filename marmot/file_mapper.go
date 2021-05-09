@@ -4,7 +4,7 @@ import (
 	"log"
 )
 
-func DecideNewLocation(album *Album) string {
+func MapLocation(album *Album) string {
 
 	oldLocation := album.mediaFolder.folderPath
 

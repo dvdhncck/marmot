@@ -198,7 +198,7 @@ func (collection *Collection) writeToJson(filename string) {
 	defer file.Close()
 	delimiter := "{\n"
 	for _, album := range collection.lookup {
-		fmt.Fprintf(file, "%s%s", delimiter, album.toJson())
+		fmt.Fprintf(file, "%s%s", delimiter, album.ToJson())
 		delimiter = ",\n"
 	}
 	fmt.Fprintf(file, "} /*x*/\n")

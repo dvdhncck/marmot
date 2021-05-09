@@ -22,7 +22,9 @@ func GoForIt() {
 	collection.getArtists(db)
 	collection.getGenres(db)
 	collection.validate()
-	collection.writeToJson(`test.json`)
+	//collection.writeToJson(`test.json`)
 
+	ExcelWrite(`test.xlsx`, collection)
+	
 	log.Printf("Scanned %d albums", count)
 }

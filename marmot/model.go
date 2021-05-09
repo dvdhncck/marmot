@@ -12,7 +12,7 @@ type MediaFolder struct {
 	folderPath  string
 }
 
-func (mf *MediaFolder) toJson() string {
+func (mf *MediaFolder) ToJson() string {
 	return fmt.Sprintf("[\"%s/%s/%s\"]",
 		mf.mountPoint, mf.rootPath, mf.folderPath)
 }
@@ -33,7 +33,16 @@ type Album struct {
 	genres      []string
 }
 
-func (album *Album) toJson() string {
+func NewAlbum(folderPath string) *Album {
+	a := Album{}
+	a.mediaFolder = &MediaFolder{}
+	a.mediaFolder.folderPath = folderPath
+	return &a
+}
+
+func (album *Album) GetOldLocation() *MediaFolder { return album.mediaFolder }
+
+func (album *Album) ToJson() string {
 	artists := []string{}
 	for _, artist := range album.artists {
 		artists = append(artists, fmt.Sprintf("\"%s\"", artist.name))
@@ -43,5 +52,5 @@ func (album *Album) toJson() string {
 		genres = append(genres, fmt.Sprintf("\"%s\"", genre))
 	}
 	return fmt.Sprintf("{ id: \"%s\",\n  name: \"%s\",\n  oldLocation: %s,\n  oldLocation: %s,\n  sortAs: \"%s\",\n  genres: [%s]\n  artists: [%s]\n}",
-		album.id, album.name, album.mediaFolder.toJson(), album.newLocation, album.sortAs, strings.Join(genres, `,`), strings.Join(artists, `,`))
+		album.id, album.name, album.mediaFolder.ToJson(), album.newLocation, album.sortAs, strings.Join(genres, `,`), strings.Join(artists, `,`))
 }
