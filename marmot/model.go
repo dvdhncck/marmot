@@ -26,12 +26,18 @@ type Artist struct {
 type Album struct {
 	id          string
 	name        string
+	mapState    int
 	mediaFolder *MediaFolder
-	newLocation string          // this is where we will migrate it to
+	location    string          // this is where we will migrate it to
 	sortAs      string
 	artists     []*Artist
 	genres      []string
 }
+
+const NO_CHANGE = 0
+const GOOD_MAP = 1
+const PROBLEM_MAP = 2
+const MAP_FAIL = 3
 
 func NewAlbum(folderPath string) *Album {
 	a := Album{}
@@ -51,6 +57,6 @@ func (album *Album) ToJson() string {
 	for _, genre := range album.genres {
 		genres = append(genres, fmt.Sprintf("\"%s\"", genre))
 	}
-	return fmt.Sprintf("{ id: \"%s\",\n  name: \"%s\",\n  oldLocation: %s,\n  oldLocation: %s,\n  sortAs: \"%s\",\n  genres: [%s]\n  artists: [%s]\n}",
-		album.id, album.name, album.mediaFolder.ToJson(), album.newLocation, album.sortAs, strings.Join(genres, `,`), strings.Join(artists, `,`))
+	return fmt.Sprintf("{ id: \"%s\",\n  name: \"%s\",\n  oldLocation: %s,\n  newLocation: %s,\n  sortAs: \"%s\",\n  genres: [%s]\n  artists: [%s]\n}",
+		album.id, album.name, album.mediaFolder.ToJson(), album.location, album.sortAs, strings.Join(genres, `,`), strings.Join(artists, `,`))
 }

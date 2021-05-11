@@ -2,11 +2,13 @@ package marmot
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
-	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"os"
 	"strings"
+	"strconv"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 type Collection struct {
@@ -20,7 +22,7 @@ func (collection *Collection) getById(id string) *Album {
 func (collection *Collection) retrieve(db *sql.DB, filter string) int {
 	//results, err := db.Query("SELECT ID, Name, SortAs FROM Album WHERE ID=336")
 	//results, err := db.Query("SELECT ID, Name, SortAs FROM Album LIMIT 10")
-	results, err := db.Query("SELECT ID, Name, SortAs FROM Album")
+	results, err := db.Query("SELECT ID, Name, SortAs, Location FROM Album")
 	if err != nil {
 		panic(err.Error())
 	}
@@ -30,10 +32,14 @@ func (collection *Collection) retrieve(db *sql.DB, filter string) int {
 	}
 	for results.Next() {
 		var album Album
+		var location sql.NullString // archiveName can be null
 		album.artists = []*Artist{}
-		err := results.Scan(&album.id, &album.name, &album.sortAs)
+		err := results.Scan(&album.id, &album.name, &album.sortAs, &location)
 		if err != nil {
 			panic(err.Error())
+		}
+		if location.Valid {
+			album.location = location.String
 		}
 		count++
 		collection.lookup[album.id] = &album
@@ -44,7 +50,7 @@ func (collection *Collection) retrieve(db *sql.DB, filter string) int {
 func (collection *Collection) validate() {
 	for _, album := range collection.lookup {
 		if len(album.artists) == 0 {
-		 	log.Printf("Album %s missing artist(s)", album.id)
+			log.Printf("Album %s missing artist(s)", album.id)
 		}
 		if album.mediaFolder == nil {
 			log.Printf("Album %s missing mediaFolder", album.id)
@@ -189,7 +195,7 @@ func (collection *Collection) getGenres(db *sql.DB) int {
 	return count
 }
 
-func (collection *Collection) writeToJson(filename string) {
+func (collection *Collection) WriteToJson(filename string) {
 	file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		panic(err.Error())
@@ -202,4 +208,48 @@ func (collection *Collection) writeToJson(filename string) {
 		delimiter = ",\n"
 	}
 	fmt.Fprintf(file, "} /*x*/\n")
+}
+
+func (collection *Collection) RemapLocations() {
+	for _, album := range collection.lookup {
+		album.location, album.mapState = MapLocation(album)
+	}
+}
+
+func (collection *Collection) Size() int {
+	if collection.lookup == nil {
+		return 0
+	} else {
+		return len(collection.lookup)
+	}
+}
+
+func (collection *Collection) UpdateNewLocation(albumId string, newLocation string) error {
+	if collection.lookup == nil {
+		return errors.New(`Collection is empty`)
+	}
+	album := collection.lookup[albumId]
+	if album == nil {
+		return errors.New(`Unable to find album ` + albumId)
+	}
+	album.location = newLocation
+	return nil  // no error
+}
+
+func (collection *Collection) ExportToDatabase(db *sql.DB) {
+
+	count := 0
+	for albumId, album := range collection.lookup {
+		albumIdInt, err := strconv.Atoi(albumId)
+		if err != nil {
+			log.Fatal(err.Error())
+		}
+		_, err = db.Exec("UPDATE Album SET Location=? WHERE ID=?", album.location, albumIdInt)
+		if err != nil {
+			log.Fatal(err.Error())
+		}
+		count += 1
+	}
+
+	log.Printf("Updated %d location entries in database", count)
 }

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"testing"
 
 	m "davidhancock.com/marmot/marmot"
@@ -25,8 +25,10 @@ func Test_shouldMapFileLocation(t *testing.T) {
 	ins := []string { 
 		`/this_has__leading_delimiter`, 
 		`Thingy thing/The Backslashe\'s`,
+		`one__two__three`,
 		`one__two`,
 		`one/two`, 
+		`one\\two`, 
 		`this_is_the_artist__this_is_the_album`,
 		`Bing & Bong/Bangle Bingle #2`,
 		`I "like" quotes/and so "do" I?`,
@@ -36,10 +38,8 @@ func Test_shouldMapFileLocation(t *testing.T) {
 
 		album := m.NewAlbum(in)
 		
-		//album.MediaFolder := m.MediaFolder{folderPath=in}
-
-		out := m.MapLocation(album)
-	
-		fmt.Printf("%s\n", out)
+		out, _ := m.MapLocation(album)
+			
+		log.Printf("%s\n", out)
 	}
 }

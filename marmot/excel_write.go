@@ -2,30 +2,33 @@ package marmot
 
 import (
 	"fmt"
+	"log"
 	"github.com/360EntSecGroup-Skylar/excelize/v2"
 )
 
 func ExcelWrite(fileName string, collection Collection) {
 
 	f := excelize.NewFile()
+	index := f.GetActiveSheetIndex();
+	sheet := f.GetSheetName(index)
 
-	sheet := `Flarp`
-	index := f.NewSheet(sheet)
+	// sheet := `Flarp`
+	// index := f.NewSheet(sheet)
 
-
-	styleA, err := f.NewStyle(`{"fill":{"type":"pattern","color":["#dd1111"],"pattern":1}}`)
+	goodMapStyle, err := f.NewStyle(`{"fill":{"type":"pattern","color":["#e0c880"],"pattern":1}}`)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
-	styleB, err := f.NewStyle(`{"fill":{"type":"pattern","color":["#11dd11"],"pattern":1}}`)
+	problemMapStyle, err := f.NewStyle(`{"fill":{"type":"pattern","color":["#abe080"],"pattern":1}}`)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
-	styleC, err := f.NewStyle(`{"fill":{"type":"pattern","color":["#1111dd"],"pattern":1}}`)
+	guessedMapStyle, err := f.NewStyle(`{"fill":{"type":"pattern","color":["#ce7feb"],"pattern":1}}`)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
 	
+
 	row := 1
 	for albumId, album := range collection.lookup {
 		f.SetRowHeight(sheet, row, 20)
@@ -34,13 +37,18 @@ func ExcelWrite(fileName string, collection Collection) {
 		f.SetCellValue(sheet, fmt.Sprintf(`C%d`, row), album.artists[0].name)
 		f.SetCellValue(sheet, fmt.Sprintf(`D%d`, row), album.mediaFolder.rootPath)
 		f.SetCellValue(sheet, fmt.Sprintf(`E%d`, row), album.mediaFolder.folderPath)
+		f.SetCellValue(sheet, fmt.Sprintf(`F%d`, row), album.mapState)
+		f.SetCellValue(sheet, fmt.Sprintf(`G%d`, row), album.location)
 
-		style := styleA
-		if row % 3 == 0 { style = styleB }
-		if row % 7 == 0 { style = styleC }
-
-		f.SetCellStyle(sheet, fmt.Sprintf(`A%d`, row), fmt.Sprintf(`E%d`, row), style)
-
+		if album.mapState == GOOD_MAP {
+			f.SetCellStyle(sheet, fmt.Sprintf(`A%d`, row), fmt.Sprintf(`G%d`, row), goodMapStyle)
+		}
+		if album.mapState == PROBLEM_MAP {
+			f.SetCellStyle(sheet, fmt.Sprintf(`A%d`, row), fmt.Sprintf(`G%d`, row), problemMapStyle)
+		}
+		if album.mapState == MAP_FAIL {
+			f.SetCellStyle(sheet, fmt.Sprintf(`A%d`, row), fmt.Sprintf(`G%d`, row), guessedMapStyle)
+		}
 		row++
 	}
 
@@ -48,11 +56,13 @@ func ExcelWrite(fileName string, collection Collection) {
 	f.SetColWidth(sheet, "B", "B", 40)
 	f.SetColWidth(sheet, "C", "C", 30)
 	f.SetColWidth(sheet, "D", "D", 10)
-	f.SetColWidth(sheet, "E", "E", 120)
+	f.SetColWidth(sheet, "E", "E", 100)
+	f.SetColWidth(sheet, "F", "F", 4)
+	f.SetColWidth(sheet, "G", "G", 100)
 
 	f.SetActiveSheet(index)
 
 	if err := f.SaveAs(fileName); err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
 }
