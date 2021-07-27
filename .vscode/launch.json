@@ -6,14 +6,13 @@
     "configurations": [
 
 
-
         {
             "name": "Accept",
             "type": "go",
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/main/marmot.go",
-            "args": ["accept", "testing/flarp1"]
+            "args": ["accept_fresh", "/home/dave/projects/go/src/davidhancock.com/marmot/test/data/good1"]
         },
 
         {

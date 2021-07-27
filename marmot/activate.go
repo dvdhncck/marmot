@@ -21,8 +21,8 @@ func GoForIt() {
 
 		count := collection.retrieve(db, ``)
 		collection.getMediaFolders(db)
-		collection.getArtists(db)
-		collection.getGenres(db)
+		collection.getArtistsForCollection(db)
+		collection.getGenresForCollection(db)
 		collection.validate()
 
 		log.Printf("Imported %d albums from database", count)
@@ -47,7 +47,7 @@ func GoForIt() {
 	}
 	
 	if settings.DoAcceptFresh() {
-		Accept(db, settings.AcceptPath())
+		Accept(db, settings.AcceptPath(), collection)
 	}
 
 }

@@ -23,7 +23,19 @@ func countSubDirsIn(fileInfos []fs.FileInfo) int {
 	return count
 }
 
-func Accept(db *sql.DB, path string) *Fails {
+func Accept(db *sql.DB, path string, collection Collection) *Fails {
+
+	fails := Validate(db, path)
+
+	if fails.IsGood() {
+		Ingest(db, path, collection)
+		return FailsOf()
+	} else {
+		return fails
+	}
+}
+	
+func Validate(db *sql.DB, path string) *Fails {
 
 	// rootPath should either be a valid-album, or a directory containing 1+ valid-albums
 
@@ -44,7 +56,7 @@ func Accept(db *sql.DB, path string) *Fails {
 				if len(contentsFileInfos) == 0 {
 					fails.Add(EMPTY_PATH)
 				} else {
-					count := countSubDirsIn(contentsFileInfos)  // shallow search
+					count := countSubDirsIn(contentsFileInfos) // shallow search
 					if count == len(contentsFileInfos) {
 						// all directories
 						for _, fileInfo := range contentsFileInfos {
@@ -86,7 +98,7 @@ func validateAlbum(fails *Fails, path string) {
 
 func validateAlbumFolder(fails *Fails, path string) {
 	pathFileInfo, err := ioutil.ReadDir(path)
-	// should contain at least 2 files, and 0 directories
+	// should contain at least the metadata file, and 0 directories
 	if err == nil {
 		if len(pathFileInfo) == 0 {
 			fails.Add(EMPTY_PATH)
@@ -96,9 +108,9 @@ func validateAlbumFolder(fails *Fails, path string) {
 				// all directories
 				fails.Add(PATH_SHOULD_NOT_CONTAIN_DIRECTORIES)
 			}
-			if len(pathFileInfo) < 2 {
-				fails.Add(PATH_SHOULD_CONTAIN_TWO_FILES_OR_MORE)
-			}
+			// if len(pathFileInfo) < 2 {
+			// 	fails.Add(PATH_SHOULD_CONTAIN_TWO_FILES_OR_MORE)
+			// }
 		}
 	}
 
@@ -109,7 +121,7 @@ func validateName(fails *Fails, path string) {
 		fails.Add(PATH_SHOULD_CONTAIN_EXACTLY_ONE_DELIMITER)
 	}
 
-	matched, _ := regexp.Match(`^([0-9a-z_]+\/)+[0-9a-z_]+__[0-9a-z_]+$`, []byte(path))
+	matched, _ := regexp.Match(`^(\/)?([0-9a-z_.]+\/)+[0-9a-z_.]+__[0-9a-z_.]+$`, []byte(path))
 	if !matched {
 		fails.Add(PATH_CONTAINS_ILLEGAL_CHARACTERS)
 	}
@@ -124,6 +136,12 @@ func validateName(fails *Fails, path string) {
 	}
 */
 
+type metadata struct {
+	Title   string
+	Genres  []string
+	Artists []string
+}
+
 func validateMetadata(fails *Fails, path string) {
 	expectedPath := filepath.Join(path, "meta.json")
 
@@ -134,38 +152,46 @@ func validateMetadata(fails *Fails, path string) {
 		return
 	}
 
-	var data map[string]interface{}
-
-	err = json.Unmarshal([]byte(file), &data)
+	metadata := metadata{}
+	err = json.Unmarshal([]byte(file), &metadata)
 
 	if err != nil {
 		fails.Add(COULD_NOT_PARSE_METADATA)
+		// no need to continue
+		return
 	}
 
-	if data[`title`] == nil {
+	if len(metadata.Title) == 0 {
 		fails.Add(MISSING_TITLE_FIELD)
-	} else {
-		_, goodType := data[`title`].(string)
-		if !goodType {
-			fails.Add(TITLE_FIELD_SHOULD_BE_STRING)
-		}
 	}
-
-	if data[`artists`] == nil {
+	
+	if metadata.Artists == nil {
 		fails.Add(MISSING_ARTISTS_FIELD)
 	} else {
-		_, goodType := data[`artists`].([]string)
-		if !goodType {
-			fails.Add(ARTISTS_FIELD_SHOULD_BE_LIST_OF_STRINGS)
+		if len(metadata.Artists) == 0 {
+			fails.Add(AT_LEAST_ONE_ARTIST_REQUIRED)
+		}
+		for _, artist := range metadata.Artists {
+			validateArtist(fails, artist)
 		}
 	}
 
-	if data[`genres`] == nil {
+	if metadata.Genres == nil {
 		fails.Add(MISSING_GENRES_FIELD)
 	} else {
-		_, goodType := data[`artists`].([]string)
-		if !goodType {
-			fails.Add(GENRES_FIELD_SHOULD_BE_LIST_OF_STRINGS)
+		if len(metadata.Genres) == 0 {
+			fails.Add(AT_LEAST_ONE_GENRE_REQUIRED)
+		}
+		for _, genre := range metadata.Genres {
+			validateGenre(fails, genre)
 		}
 	}
+}
+
+func validateArtist(fails *Fails, artist string) {
+	//log.Printf("validating artist: %s", artist)
+}
+
+func validateGenre(fails *Fails, genre string) {	
+	//log.Printf("validating genre: %s", genre)
 }
