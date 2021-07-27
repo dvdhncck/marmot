@@ -17,6 +17,11 @@ func (mf *MediaFolder) ToJson() string {
 		mf.mountPoint, mf.rootPath, mf.folderPath)
 }
 
+type Genre struct {
+	id     string
+	name   string
+}
+
 type Artist struct {
 	id     string
 	name   string
@@ -31,7 +36,9 @@ type Album struct {
 	location    string          // this is where we will migrate it to
 	sortAs      string
 	artists     []*Artist
-	genres      []string
+	genres      []*Genre
+
+	clean		bool            // if true, memory copy is believed to be in sync with database
 }
 
 const NO_CHANGE = 0
@@ -39,7 +46,21 @@ const GOOD_MAP = 1
 const PROBLEM_MAP = 2
 const MAP_FAIL = 3
 
-func NewAlbum(folderPath string) *Album {
+func NewAlbumFromFilesystem(location string, title string, artists []string, genres []string) *Album {
+	a := Album{}
+	a.name = title
+	a.artists = []*Artist{}
+	for _, artist := range artists {
+		a.artists = append(a.artists, &Artist{``, artist, ``})
+	}
+	for _, genre := range genres {
+		a.genres = append(a.genres, &Genre{``, genre})
+	}
+	a.location = location
+	return &a
+}
+
+func NewAlbumFromDatabase(folderPath string) *Album {
 	a := Album{}
 	a.mediaFolder = &MediaFolder{}
 	a.mediaFolder.folderPath = folderPath

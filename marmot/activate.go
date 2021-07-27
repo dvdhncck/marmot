@@ -45,5 +45,9 @@ func GoForIt() {
 	if settings.DoExportToDatabase() {
 		collection.ExportToDatabase(db)
 	}
+	
+	if settings.DoAcceptFresh() {
+		Accept(db, settings.AcceptPath())
+	}
 
 }

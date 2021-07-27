@@ -30,7 +30,7 @@ func ExcelWrite(fileName string, collection Collection) {
 	
 
 	row := 1
-	for albumId, album := range collection.lookup {
+	for albumId, album := range collection.inDatabase {
 		f.SetRowHeight(sheet, row, 20)
 		f.SetCellValue(sheet, fmt.Sprintf(`A%d`, row), albumId)
 		f.SetCellValue(sheet, fmt.Sprintf(`B%d`, row), album.name)

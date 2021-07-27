@@ -4,19 +4,24 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"os"
 	"strings"
-	"strconv"
-	_ "github.com/go-sql-driver/mysql"
 )
 
 type Collection struct {
-	lookup map[string]*Album
+	inDatabase map[string]*Album
+	inFlight   []*Album
+}
+
+func (collection *Collection) Add(db *sql.DB, album *Album) {
+	collection.enrich(db, album)
+	collection.inFlight = append(collection.inFlight, album)
 }
 
 func (collection *Collection) getById(id string) *Album {
-	return collection.lookup[id]
+	return collection.inDatabase[id]
 }
 
 func (collection *Collection) retrieve(db *sql.DB, filter string) int {
@@ -27,8 +32,8 @@ func (collection *Collection) retrieve(db *sql.DB, filter string) int {
 		panic(err.Error())
 	}
 	count := 0
-	if collection.lookup == nil {
-		collection.lookup = make(map[string]*Album)
+	if collection.inDatabase == nil {
+		collection.inDatabase = make(map[string]*Album)
 	}
 	for results.Next() {
 		var album Album
@@ -42,13 +47,13 @@ func (collection *Collection) retrieve(db *sql.DB, filter string) int {
 			album.location = location.String
 		}
 		count++
-		collection.lookup[album.id] = &album
+		collection.inDatabase[album.id] = &album
 	}
 	return count
 }
 
 func (collection *Collection) validate() {
-	for _, album := range collection.lookup {
+	for _, album := range collection.inDatabase {
 		if len(album.artists) == 0 {
 			log.Printf("Album %s missing artist(s)", album.id)
 		}
@@ -58,10 +63,15 @@ func (collection *Collection) validate() {
 	}
 }
 
+func (collection *Collection) enrich(db *sql.DB, album *Album) {
+	collection.enrichArtistsForAlbum(db, album)
+	collection.enrichGenresForAlbum(db, album)
+}
+
 func (collection *Collection) makeIdList() string {
-	keys := make([]string, len(collection.lookup))
+	keys := make([]string, len(collection.inDatabase))
 	i := 0
-	for k := range collection.lookup {
+	for k := range collection.inDatabase {
 		keys[i] = k
 		i++
 	}
@@ -107,8 +117,35 @@ func (collection *Collection) getMediaFolders(db *sql.DB) int {
 	return count
 }
 
-func (collection *Collection) getArtists(db *sql.DB) int {
+func (collection *Collection) enrichArtistsForAlbum(db *sql.DB, album *Album) {
+	for _, artist := range album.artists {
+		results, err := db.Query("SELECT ID FROM Artist WHERE Name=?", artist.name)
+		if err != nil {
+			panic(err.Error())
+		} else {
+			for results.Next() {
+				results.Scan(&artist.id)
+			}
+		}
+	}
+}
+
+func (collection *Collection) enrichGenresForAlbum(db *sql.DB, album *Album) {
+	for _, genre := range album.genres {
+		results, err := db.Query("SELECT ID FROM Genre WHERE Name=?", genre.name)
+		if err != nil {
+			panic(err.Error())
+		} else {
+			for results.Next() {
+				results.Scan(&genre.id)
+			}
+		}
+	}
+}
+
+func (collection *Collection) getArtistsForCollection(db *sql.DB) int {
 	albumIdList := collection.makeIdList()
+	
 	results, err := db.Query("SELECT AlbumID, ID, Name, SortAs FROM AlbumArtist aa JOIN Artist a ON a.ID=aa.ArtistID AND aa.AlbumID IN " + albumIdList)
 	if err != nil {
 		panic(err.Error())
@@ -156,9 +193,9 @@ func (collection *Collection) getArtists(db *sql.DB) int {
 	return count
 }
 
-func (collection *Collection) getGenres(db *sql.DB) int {
+func (collection *Collection) getGenresForCollection(db *sql.DB) int {
 	albumIdList := collection.makeIdList()
-	results, err := db.Query("SELECT AlbumID, GenreID, Name FROM AlbumGenre ag JOIN Genre g ON g.ID=ag.GenreID AND ag.AlbumID IN " + albumIdList)
+	results, err := db.Query("SELECT AlbumID, g.ID as GenreID, g.Name AS GenreName FROM AlbumGenre ag JOIN Genre g ON g.ID=ag.GenreID AND ag.AlbumID IN " + albumIdList)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -182,9 +219,9 @@ func (collection *Collection) getGenres(db *sql.DB) int {
 				log.Printf("Album %s doesnt exist, but has a genre", albumId)
 			} else {
 				if album.genres == nil {
-					album.genres = []string{}
+					album.genres = []*Genre{}
 				}
-				album.genres = append(album.genres, genreName.String)
+				album.genres = append(album.genres, &Genre{genreId.String, genreName.String})
 			}
 		} else {
 			log.Printf("Genre with NULL ID for Album %s\n", albumId)
@@ -203,7 +240,7 @@ func (collection *Collection) WriteToJson(filename string) {
 
 	defer file.Close()
 	delimiter := "{\n"
-	for _, album := range collection.lookup {
+	for _, album := range collection.inDatabase {
 		fmt.Fprintf(file, "%s%s", delimiter, album.ToJson())
 		delimiter = ",\n"
 	}
@@ -211,45 +248,127 @@ func (collection *Collection) WriteToJson(filename string) {
 }
 
 func (collection *Collection) RemapLocations() {
-	for _, album := range collection.lookup {
+	for _, album := range collection.inDatabase {
 		album.location, album.mapState = MapLocation(album)
+		album.clean = false
 	}
 }
 
 func (collection *Collection) Size() int {
-	if collection.lookup == nil {
+	if collection.inDatabase == nil {
 		return 0
 	} else {
-		return len(collection.lookup)
+		return len(collection.inDatabase)
 	}
 }
 
 func (collection *Collection) UpdateNewLocation(albumId string, newLocation string) error {
-	if collection.lookup == nil {
+	if collection.inDatabase == nil {
 		return errors.New(`Collection is empty`)
 	}
-	album := collection.lookup[albumId]
+	album := collection.inDatabase[albumId]
 	if album == nil {
 		return errors.New(`Unable to find album ` + albumId)
 	}
 	album.location = newLocation
-	return nil  // no error
+	album.clean = false
+	return nil // no error
 }
 
+type DryRunResult struct{}
+
+var magicId = int64(1000000)
+
+func (d DryRunResult) LastInsertId() (int64, error) {
+	magicId += 1
+	return magicId, nil
+}
+func (d DryRunResult) RowsAffected() (int64, error) {
+	return 0, nil
+}
+
+func maybeExecute(db *sql.DB, query string, args ...string) (sql.Result, error) {
+	if settings.dryRun {
+		log.Printf("%s (%s)\n", query, strings.Join(args, ","))
+		return DryRunResult{}, nil
+	} else {
+		return db.Exec(query, args)
+	}
+}
+
+func (collection *Collection) addAlbumToDatabase(db *sql.DB, album *Album) {
+
+	for _, artist := range album.artists {
+		if artist.id == `` {
+			result, err := maybeExecute(db, "INSERT INTO Artist (ID, Name) VALUES (NULL, ?)", artist.name)
+			if err == nil {
+				id, err := result.LastInsertId()
+				if err != nil {
+					log.Fatal(err.Error())
+				} else {
+					artist.id = fmt.Sprintf(`%d`, id)
+				}
+			} else {
+				log.Fatal(err.Error())
+			}
+		}
+	}
+
+	result, err := maybeExecute(db, "INSERT INTO Album (ID, Name, Location) VALUES (NULL, ?, ?)", album.name, album.location)
+	if err == nil {
+		id, err := result.LastInsertId()
+		if err != nil {
+			log.Fatal(err.Error())
+		} else {
+			album.id = fmt.Sprintf(`%d`, id)
+		}
+	} else {
+		log.Fatal(err.Error())
+	}
+
+	_, err = maybeExecute(db, "DELETE FROM AlbumArtist WHERE AlbumID=?", album.id)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	for _, artist := range album.artists {
+		_, err := maybeExecute(db, "INSERT INTO AlbumArtist (AlbumID, ArtistID) VALUES (?, ?)", album.id, artist.id)
+		if err != nil {
+			log.Fatal(err.Error())
+		}
+	}
+
+	_, err = maybeExecute(db, "DELETE FROM AlbumGenre WHERE AlbumID=?", album.id)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	for _, genre := range album.genres {
+		_, err := maybeExecute(db, "INSERT INTO AlbumGenre (AlbumID, GenreID) VALUES (?, ?)", album.id, genre.id)
+		if err != nil {
+			log.Fatal(err.Error())
+		}
+	}
+}
 func (collection *Collection) ExportToDatabase(db *sql.DB) {
 
 	count := 0
-	for albumId, album := range collection.lookup {
-		albumIdInt, err := strconv.Atoi(albumId)
-		if err != nil {
-			log.Fatal(err.Error())
+	for _, album := range collection.inDatabase {
+		if !album.clean {
+			_, err := maybeExecute(db, "UPDATE Album SET Location=? WHERE ID=?", album.location, album.id)
+			if err != nil {
+				log.Fatal(err.Error())
+			}
+			count += 1
+			album.clean = true
 		}
-		_, err = db.Exec("UPDATE Album SET Location=? WHERE ID=?", album.location, albumIdInt)
-		if err != nil {
-			log.Fatal(err.Error())
-		}
-		count += 1
 	}
 
 	log.Printf("Updated %d location entries in database", count)
+
+	for _, album := range collection.inFlight {
+		collection.addAlbumToDatabase(db, album)
+	}
+
+	log.Printf("Added %d new entries to database", len(collection.inFlight))
 }

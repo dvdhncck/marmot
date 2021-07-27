@@ -36,7 +36,7 @@ func Test_shouldMapFileLocation(t *testing.T) {
 
 	for _, in := range ins {
 
-		album := m.NewAlbum(in)
+		album := m.NewAlbumFromDatabase(in)
 		
 		out, _ := m.MapLocation(album)
 			

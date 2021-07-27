@@ -13,6 +13,7 @@ type Settings struct {
 	dryRun  bool
 	verbose bool
 	command []string
+	acceptPath string
 }
 
 var settings = Settings{}
@@ -46,6 +47,10 @@ func (s *Settings) ImportFileName() string {
 	return `marmot.xlsx`
 }
 
+func (s *Settings) AcceptPath() string {
+	return s.acceptPath
+}
+
 func (s *Settings) DoImportFromDatabase() bool {
 	return s.indexOf(`db_import`) >= 0
 }
@@ -64,4 +69,13 @@ func (s *Settings) DoExportToExcel() bool {
 
 func (s *Settings) DoRemapLocations() bool {
 	return s.indexOf(`remap_locations`) >= 0
+}
+
+func (s *Settings) DoAcceptFresh() bool {
+	index := s.indexOf(`accept_fresh`)
+	if index >= 0 {
+		settings.acceptPath = s.command[index + 1]
+		return true
+	}
+	return false
 }
