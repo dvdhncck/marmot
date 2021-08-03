@@ -3,6 +3,7 @@ package marmot
 import (
 	"database/sql"
 	"encoding/json"
+	"github.com/disintegration/imaging"
 	"io/fs"
 	"io/ioutil"
 	"os"
@@ -93,6 +94,7 @@ func validateAlbum(fails *Fails, path string) {
 
 	if fails.IsGood() {
 		fails.Examine(validateMetadata, path)
+		fails.Examine(validateCoverArt, path)
 	}
 }
 
@@ -186,6 +188,15 @@ func validateMetadata(fails *Fails, path string) {
 			validateGenre(fails, genre)
 		}
 	}
+}
+
+func validateCoverArt(fails *Fails, path string) {
+	inputPath := filepath.Join(path, "cover.jpg")
+	_, err := imaging.Open(inputPath)
+	if err != nil {
+		fails.Add(CANNOT_OPEN_COVER_ART)
+	}
+
 }
 
 func validateArtist(fails *Fails, artist string) {

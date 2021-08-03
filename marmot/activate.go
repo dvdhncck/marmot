@@ -19,7 +19,7 @@ func GoForIt() {
 
 	if settings.DoImportFromDatabase() {
 
-		count := collection.retrieve(db, ``)
+		count := collection.LoadFromDatabase(db, ``)
 		collection.getMediaFolders(db)
 		collection.getArtistsForCollection(db)
 		collection.getGenresForCollection(db)
@@ -30,6 +30,10 @@ func GoForIt() {
 
 	if settings.DoRemapLocations() {
 		collection.RemapLocations()
+	}
+
+	if settings.DoTranslocate() {
+		collection.Translocate(db)
 	}
 
 	if settings.DoExportToExcel() {
@@ -43,10 +47,11 @@ func GoForIt() {
 	}
 	
 	if settings.DoExportToDatabase() {
-		collection.ExportToDatabase(db)
+		collection.WriteToDatabase(db)
 	}
 	
-	if settings.DoAcceptFresh() {
+	if settings.DoIngest() {
+		log.Printf("Evaluating %s", settings.acceptPath)
 		Accept(db, settings.AcceptPath(), collection)
 	}
 

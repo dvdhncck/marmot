@@ -2,14 +2,14 @@ package marmot
 
 import (
 	"fmt"
-	"log"
 	"github.com/360EntSecGroup-Skylar/excelize/v2"
+	"log"
 )
 
 func ExcelWrite(fileName string, collection Collection) {
 
 	f := excelize.NewFile()
-	index := f.GetActiveSheetIndex();
+	index := f.GetActiveSheetIndex()
 	sheet := f.GetSheetName(index)
 
 	// sheet := `Flarp`
@@ -27,7 +27,6 @@ func ExcelWrite(fileName string, collection Collection) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	
 
 	row := 1
 	for albumId, album := range collection.inDatabase {
@@ -37,18 +36,34 @@ func ExcelWrite(fileName string, collection Collection) {
 		f.SetCellValue(sheet, fmt.Sprintf(`C%d`, row), album.artists[0].name)
 		f.SetCellValue(sheet, fmt.Sprintf(`D%d`, row), album.mediaFolder.rootPath)
 		f.SetCellValue(sheet, fmt.Sprintf(`E%d`, row), album.mediaFolder.folderPath)
-		f.SetCellValue(sheet, fmt.Sprintf(`F%d`, row), album.mapState)
+
+		switch album.mapState {
+		case NO_CHANGE:
+			f.SetCellValue(sheet, fmt.Sprintf(`F%d`, row), `UNCHANGED`)
+		case GOOD_MAP:
+			f.SetCellValue(sheet, fmt.Sprintf(`F%d`, row), `GOOD`)
+		case PROBLEM_MAP:
+			f.SetCellValue(sheet, fmt.Sprintf(`F%d`, row), `PROBLEM`)
+		case MAP_FAIL:
+			f.SetCellValue(sheet, fmt.Sprintf(`F%d`, row), `MAP_FAIL`)
+		}
+
 		f.SetCellValue(sheet, fmt.Sprintf(`G%d`, row), album.location)
 
+		locationState := GetLocationState(album)
+		f.SetCellValue(sheet, fmt.Sprintf(`I%d`, row), locationState)
+
 		if album.mapState == GOOD_MAP {
-			f.SetCellStyle(sheet, fmt.Sprintf(`A%d`, row), fmt.Sprintf(`G%d`, row), goodMapStyle)
+			f.SetCellStyle(sheet, fmt.Sprintf(`A%d`, row), fmt.Sprintf(`I%d`, row), goodMapStyle)
 		}
 		if album.mapState == PROBLEM_MAP {
-			f.SetCellStyle(sheet, fmt.Sprintf(`A%d`, row), fmt.Sprintf(`G%d`, row), problemMapStyle)
+			f.SetCellStyle(sheet, fmt.Sprintf(`A%d`, row), fmt.Sprintf(`I%d`, row), problemMapStyle)
 		}
 		if album.mapState == MAP_FAIL {
-			f.SetCellStyle(sheet, fmt.Sprintf(`A%d`, row), fmt.Sprintf(`G%d`, row), guessedMapStyle)
+			f.SetCellStyle(sheet, fmt.Sprintf(`A%d`, row), fmt.Sprintf(`I%d`, row), guessedMapStyle)
 		}
+
+
 		row++
 	}
 

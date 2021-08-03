@@ -33,6 +33,7 @@ func transmute(input string) string {
 	newLocation = strings.ReplaceAll(newLocation, `\\`, `__`)  // windows path seperator
 	newLocation = strings.ReplaceAll(newLocation, `\`, `__`)  // windows path seperator
 	
+
 	newLocation = strings.ReplaceAll(newLocation, `'`, ``)   // apostrophe
 
 	newLocation = strings.ReplaceAll(newLocation, `- `, ``) // dash-space
@@ -51,11 +52,32 @@ func transmute(input string) string {
 	return newLocation
 } 
 	
+func GetLocationState(album *Album) string {
+
+	if strings.Count(album.location,`__`) > 1 {
+		return "DOUBLE_DEL"
+	}
+
+	if strings.Count(album.location,`__`) == 0 {
+		return "NO_DEL"
+	}
+
+	if len(album.location) > 64 {
+		return "LONG"
+	}
+
+	return "OK"
+}
+
 func MapLocation(album *Album) (string, int) {
 
 	oldLocation := album.mediaFolder.folderPath
 
 	newLocation := transmute(oldLocation)
+
+	for strings.Contains(newLocation,`___`) {
+	 	newLocation = strings.ReplaceAll(newLocation, `___`, `__`)  // over-enthusiastic underscore
+	}
 
 	mapState := NO_CHANGE
 

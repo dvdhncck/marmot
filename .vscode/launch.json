@@ -12,7 +12,7 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/main/marmot.go",
-            "args": ["accept_fresh", "/home/dave/projects/go/src/davidhancock.com/marmot/test/data/good1"]
+            "args": ["-dryRun", "accept_fresh", "/home/dave/projects/go/src/davidhancock.com/marmot/test/data/good1"]
         },
 
         {
@@ -31,6 +31,15 @@
             "mode": "auto",
             "program": "${workspaceFolder}/main/marmot.go",
             "args": ["db_import", "excel_import", "db_export"]
+        },
+
+        {
+            "name": "DbImportExport",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main/marmot.go",
+            "args": ["db_import", "db_export"]
         }
     ]
 }

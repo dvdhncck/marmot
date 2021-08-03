@@ -14,6 +14,7 @@ type Settings struct {
 	verbose bool
 	command []string
 	acceptPath string
+	rootPath string
 }
 
 var settings = Settings{}
@@ -21,12 +22,14 @@ var settings = Settings{}
 func ParseArguments() {
 
 	flag.BoolVar(&settings.verbose, "verbose", false, "be verbose")
+
 	flag.BoolVar(&settings.dryRun, "dryRun", false, "don't affect anything")
+
+	flag.StringVar(&settings.rootPath, "rootPath", "/home/dave/projects/html/marmot", "the path of root")
 
 	flag.Parse()
 
 	settings.command = flag.Args()
-
 }
 
 func (s *Settings) indexOf(command string) int {
@@ -71,8 +74,12 @@ func (s *Settings) DoRemapLocations() bool {
 	return s.indexOf(`remap_locations`) >= 0
 }
 
-func (s *Settings) DoAcceptFresh() bool {
-	index := s.indexOf(`accept_fresh`)
+func (s *Settings) DoTranslocate() bool {
+	return s.indexOf(`translocate`) >= 0
+}
+
+func (s *Settings) DoIngest() bool {
+	index := s.indexOf(`ingest`)
 	if index >= 0 {
 		settings.acceptPath = s.command[index + 1]
 		return true

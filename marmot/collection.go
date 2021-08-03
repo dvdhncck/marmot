@@ -24,7 +24,7 @@ func (collection *Collection) getById(id string) *Album {
 	return collection.inDatabase[id]
 }
 
-func (collection *Collection) retrieve(db *sql.DB, filter string) int {
+func (collection *Collection) LoadFromDatabase(db *sql.DB, filter string) int {
 	//results, err := db.Query("SELECT ID, Name, SortAs FROM Album WHERE ID=336")
 	//results, err := db.Query("SELECT ID, Name, SortAs FROM Album LIMIT 10")
 	results, err := db.Query("SELECT ID, Name, SortAs, Location FROM Album")
@@ -287,9 +287,14 @@ func (d DryRunResult) RowsAffected() (int64, error) {
 	return 0, nil
 }
 
-func maybeExecute(db *sql.DB, query string, args ...string) (sql.Result, error) {
+func maybeExecute(db *sql.DB, query string, args ...interface{}) (sql.Result, error) {
 	if settings.dryRun {
-		log.Printf("%s (%s)\n", query, strings.Join(args, ","))
+		message := query + " ("
+		for _, a := range args {
+			message += fmt.Sprintf("%v,", a)
+		}
+		message += ")"
+		log.Printf(message)
 		return DryRunResult{}, nil
 	} else {
 		return db.Exec(query, args)
@@ -350,7 +355,8 @@ func (collection *Collection) addAlbumToDatabase(db *sql.DB, album *Album) {
 		}
 	}
 }
-func (collection *Collection) ExportToDatabase(db *sql.DB) {
+
+func (collection *Collection) WriteToDatabase(db *sql.DB) {
 
 	count := 0
 	for _, album := range collection.inDatabase {
@@ -368,7 +374,9 @@ func (collection *Collection) ExportToDatabase(db *sql.DB) {
 
 	for _, album := range collection.inFlight {
 		collection.addAlbumToDatabase(db, album)
+		InstallCoverArt(album)
 	}
+	
 
 	log.Printf("Added %d new entries to database", len(collection.inFlight))
 }
