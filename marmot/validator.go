@@ -125,7 +125,7 @@ func validateName(fails *Fails, path string) {
 
 	// must have at least zero or more parent directories and a sensible end bit (i.e. aaa__xyz123)
 
-	matched, _ := regexp.Match(`^(\/)?([0-9a-z_.]+\/)*[0-9a-z_.]+__[0-9a-z_.]+$`, []byte(path))
+	matched, _ := regexp.Match(`^(\/)?([0-9a-z_.]+\/)*[0-9a-z_.]+__[0-9a-z_.]+(\/)?$`, []byte(path))
 	if !matched {
 		fails.Add(PATH_CONTAINS_ILLEGAL_CHARACTERS)
 	}

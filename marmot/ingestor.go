@@ -48,7 +48,11 @@ func IngestPath(db *sql.DB, path string) {
 	metadata := metadata{}
 	_ = json.Unmarshal([]byte(file), &metadata)
 
-	album := NewAlbumFromFilesystem(metadata.ID, path, metadata.Title, metadata.Artists, metadata.Genres)
+	// we've alfready checked that its rooted correctly inder the music directory structure
+	
+	actualLocation := filepath.Base(path)
+
+	album := NewAlbumFromFilesystem(metadata.ID, actualLocation, metadata.Title, metadata.Artists, metadata.Genres)
 
 	WriteToDatabase(db, album)
 }
