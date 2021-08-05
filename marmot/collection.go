@@ -287,17 +287,17 @@ func (d DryRunResult) RowsAffected() (int64, error) {
 	return 0, nil
 }
 
-func maybeExecute(db *sql.DB, query string, args ...interface{}) (sql.Result, error) {
+func MaybeExecute(db *sql.DB, query string, args ...interface{}) (sql.Result, error) {
 	if settings.dryRun {
 		message := query + " ("
 		for _, a := range args {
 			message += fmt.Sprintf("%v,", a)
 		}
 		message += ")"
-		log.Printf(message)
+		log.Print(message)
 		return DryRunResult{}, nil
 	} else {
-		return db.Exec(query, args)
+		return db.Exec(query, args...)
 	}
 }
 
@@ -305,7 +305,7 @@ func (collection *Collection) addAlbumToDatabase(db *sql.DB, album *Album) {
 
 	for _, artist := range album.artists {
 		if artist.id == `` {
-			result, err := maybeExecute(db, "INSERT INTO Artist (ID, Name) VALUES (NULL, ?)", artist.name)
+			result, err := MaybeExecute(db, "INSERT INTO Artist (ID, Name) VALUES (NULL, ?)", artist.name)
 			if err == nil {
 				id, err := result.LastInsertId()
 				if err != nil {
@@ -319,7 +319,7 @@ func (collection *Collection) addAlbumToDatabase(db *sql.DB, album *Album) {
 		}
 	}
 
-	result, err := maybeExecute(db, "INSERT INTO Album (ID, Name, Location) VALUES (NULL, ?, ?)", album.name, album.location)
+	result, err := MaybeExecute(db, "INSERT INTO Album (ID, Name, Location) VALUES (NULL, ?, ?)", album.name, album.location)
 	if err == nil {
 		id, err := result.LastInsertId()
 		if err != nil {
@@ -331,25 +331,25 @@ func (collection *Collection) addAlbumToDatabase(db *sql.DB, album *Album) {
 		log.Fatal(err.Error())
 	}
 
-	_, err = maybeExecute(db, "DELETE FROM AlbumArtist WHERE AlbumID=?", album.id)
+	_, err = MaybeExecute(db, "DELETE FROM AlbumArtist WHERE AlbumID=?", album.id)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
 	for _, artist := range album.artists {
-		_, err := maybeExecute(db, "INSERT INTO AlbumArtist (AlbumID, ArtistID) VALUES (?, ?)", album.id, artist.id)
+		_, err := MaybeExecute(db, "INSERT INTO AlbumArtist (AlbumID, ArtistID) VALUES (?, ?)", album.id, artist.id)
 		if err != nil {
 			log.Fatal(err.Error())
 		}
 	}
 
-	_, err = maybeExecute(db, "DELETE FROM AlbumGenre WHERE AlbumID=?", album.id)
+	_, err = MaybeExecute(db, "DELETE FROM AlbumGenre WHERE AlbumID=?", album.id)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
 	for _, genre := range album.genres {
-		_, err := maybeExecute(db, "INSERT INTO AlbumGenre (AlbumID, GenreID) VALUES (?, ?)", album.id, genre.id)
+		_, err := MaybeExecute(db, "INSERT INTO AlbumGenre (AlbumID, GenreID) VALUES (?, ?)", album.id, genre.id)
 		if err != nil {
 			log.Fatal(err.Error())
 		}
@@ -361,7 +361,7 @@ func (collection *Collection) WriteToDatabase(db *sql.DB) {
 	count := 0
 	for _, album := range collection.inDatabase {
 		if !album.clean {
-			_, err := maybeExecute(db, "UPDATE Album SET Location=? WHERE ID=?", album.location, album.id)
+			_, err := MaybeExecute(db, "UPDATE Album SET Location=? WHERE ID=?", album.location, album.id)
 			if err != nil {
 				log.Fatal(err.Error())
 			}

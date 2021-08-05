@@ -2,8 +2,9 @@ package marmot
 
 import (
 	"database/sql"
-	_ "github.com/go-sql-driver/mysql"
 	"log"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 func GoForIt() {
@@ -17,42 +18,59 @@ func GoForIt() {
 
 	collection := Collection{}
 
-	if settings.DoImportFromDatabase() {
+	for settings.HasToken() {
 
-		count := collection.LoadFromDatabase(db, ``)
-		collection.getMediaFolders(db)
-		collection.getArtistsForCollection(db)
-		collection.getGenresForCollection(db)
-		collection.validate()
+		token := settings.NextToken()
 
-		log.Printf("Imported %d albums from database", count)
-	}
+		switch token {
+		case `db_import`:
+			count := collection.LoadFromDatabase(db, ``)
+			collection.getMediaFolders(db)
+			collection.getArtistsForCollection(db)
+			collection.getGenresForCollection(db)
+			collection.validate()
+			log.Printf("Imported %d albums from database", count)
 
-	if settings.DoRemapLocations() {
-		collection.RemapLocations()
-	}
+		case `db_export`:
+			collection.WriteToDatabase(db)
 
-	if settings.DoTranslocate() {
-		collection.Translocate(db)
-	}
+		case `excel_import`:
+			ExcelRead(settings.ImportFileName(), collection)
+			log.Printf("Read collection with %d items from %s", collection.Size(), settings.ImportFileName())
 
-	if settings.DoExportToExcel() {
-		ExcelWrite(settings.ExportFileName(), collection)
-		log.Printf("Wrote collection to %s", settings.ExportFileName())
-	}
+		case `excel_export`:
+			ExcelWrite(settings.ExportFileName(), collection)
+			log.Printf("Wrote collection to %s", settings.ExportFileName())
 
-	if settings.DoImportFromExcel() {
-		ExcelRead(settings.ImportFileName(), collection)
-		log.Printf("Read collection with %d items from %s", collection.Size(), settings.ImportFileName())
-	}
-	
-	if settings.DoExportToDatabase() {
-		collection.WriteToDatabase(db)
-	}
-	
-	if settings.DoIngest() {
-		log.Printf("Evaluating %s", settings.acceptPath)
-		Accept(db, settings.AcceptPath(), collection)
-	}
+		case `remap_locations`:
+			collection.RemapLocations()
 
+		case `sanitise`:
+			collection.Sanitise(db)
+
+		case `translocate`:
+			collection.Translocate(db)
+
+		case `ingest`:
+			if settings.HasToken() {
+				path := settings.NextToken()
+				fails := Validate(db, path)
+				if fails.IsGood() {
+					Ingest(db, path)
+				} else {
+					fails.Write()
+				}
+			} else {
+				log.Fatal("Expected path after 'prepare'")
+			}
+
+		case `prepare`:
+			if settings.HasToken() {
+				path := settings.NextToken()
+				Prepare(db, path)
+			} else {
+				log.Fatal("Expected path after 'prepare'")
+			}
+		}
+	}
 }

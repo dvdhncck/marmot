@@ -3,42 +3,30 @@ package marmot
 import (
 	"database/sql"
 	"encoding/json"
-	"github.com/disintegration/imaging"
 	"io/fs"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
+	"github.com/disintegration/imaging"
+
 	_ "github.com/go-sql-driver/mysql"
 )
 
-func countSubDirsIn(fileInfos []fs.FileInfo) int {
-	count := 0
-	for _, fileInfo := range fileInfos {
-		if fileInfo.IsDir() {
-			count += 1
-		}
-	}
-	return count
-}
+var genreCache = make(map[string]int64)
+var artistCache = make(map[string]int64)
 
-func Accept(db *sql.DB, path string, collection Collection) *Fails {
-
-	fails := Validate(db, path)
-
-	if fails.IsGood() {
-		Ingest(db, path, collection)
-		return FailsOf()
-	} else {
-		return fails
-	}
-}
-	
 func Validate(db *sql.DB, path string) *Fails {
 
-	// rootPath should either be a valid-album, or a directory containing 1+ valid-albums
+	populateGenreCache(db)
+	populateArtistCache(db)
+
+	log.Printf("Validating %s", path)
+
+	// path should either be a valid-album, or a directory containing 1+ valid-albums
 
 	// each valid-album should:
 	//  1. not contain sub-dirs
@@ -87,7 +75,19 @@ func Validate(db *sql.DB, path string) *Fails {
 	return fails
 }
 
+func countSubDirsIn(fileInfos []fs.FileInfo) int {
+	count := 0
+	for _, fileInfo := range fileInfos {
+		if fileInfo.IsDir() {
+			count += 1
+		}
+	}
+	return count
+}
+
 func validateAlbum(fails *Fails, path string) {
+	log.Printf("Validating album: %s", path)
+
 	fails.Examine(validateName, path)
 
 	fails.Examine(validateAlbumFolder, path)
@@ -123,7 +123,9 @@ func validateName(fails *Fails, path string) {
 		fails.Add(PATH_SHOULD_CONTAIN_EXACTLY_ONE_DELIMITER)
 	}
 
-	matched, _ := regexp.Match(`^(\/)?([0-9a-z_.]+\/)+[0-9a-z_.]+__[0-9a-z_.]+$`, []byte(path))
+	// must have at least zero or more parent directories and a sensible end bit (i.e. aaa__xyz123)
+
+	matched, _ := regexp.Match(`^(\/)?([0-9a-z_.]+\/)*[0-9a-z_.]+__[0-9a-z_.]+$`, []byte(path))
 	if !matched {
 		fails.Add(PATH_CONTAINS_ILLEGAL_CHARACTERS)
 	}
@@ -132,16 +134,18 @@ func validateName(fails *Fails, path string) {
 /*
 	meta.json:
 	{
-		title: 'this is the title',
-		artists: ['artist one', 'artist two']
-		genres: ['one','two','three']
+		"id": 1234,
+		"title": "this is the title",
+		"artists": ["artist one", "artist two"]
+		"genres": ["one","two","three"]
 	}
 */
 
 type metadata struct {
-	Title   string
-	Genres  []string
-	Artists []string
+	ID 		int64     `json:"id"`
+	Title   string    `json:"title"`
+	Genres  []string  `json:"genres"`
+	Artists []string  `json:"artists"`
 }
 
 func validateMetadata(fails *Fails, path string) {
@@ -165,6 +169,10 @@ func validateMetadata(fails *Fails, path string) {
 
 	if len(metadata.Title) == 0 {
 		fails.Add(MISSING_TITLE_FIELD)
+	}
+	
+	if metadata.ID == 0 {
+		fails.Add(MISSING_ID_FIELD)
 	}
 	
 	if metadata.Artists == nil {
@@ -200,9 +208,61 @@ func validateCoverArt(fails *Fails, path string) {
 }
 
 func validateArtist(fails *Fails, artist string) {
-	//log.Printf("validating artist: %s", artist)
+	if _, ok := artistCache[artist]; ok {
+		log.Println(artist + ` exists`)
+	} else {
+		log.Println(artist + ` is NEW`)
+	}
 }
 
 func validateGenre(fails *Fails, genre string) {	
-	//log.Printf("validating genre: %s", genre)
+	if len(strings.TrimSpace(genre)) == 0 {
+		fails.Add(EMPTY_GENRE)
+		return
+	}
+
+	if _, ok := genreCache[genre]; !ok {
+		fails.Add(UNKNOWN_GENRE)
+		return
+	}
+}
+
+func populateGenreCache(db *sql.DB) {
+	rows, err := db.Query("SELECT ID, Name FROM Genre")
+	if err != nil {
+		log.Printf("Error querying genres: %s", err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var genre string
+		var id int64
+		err = rows.Scan(&id, &genre)
+		if err != nil {
+			log.Printf("Error scanning row: %s", err)
+			return
+		}
+		genreCache[genre] = id
+	}
+}
+
+func populateArtistCache(db *sql.DB) {
+	rows, err := db.Query("SELECT ID, Name FROM Artist")
+	if err != nil {
+		log.Printf("Error querying artists: %s", err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var artist string
+		var id int64
+		err = rows.Scan(&id, &artist)
+		if err != nil {
+			log.Printf("Error scanning row: %s", err)
+			return
+		}
+		artistCache[artist] = id
+	}
 }

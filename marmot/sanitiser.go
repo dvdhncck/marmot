@@ -2,13 +2,9 @@ package marmot
 
 import (
 	"database/sql"
-	"errors"
-	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -94,7 +90,7 @@ func CopyCoverArt(album *Album, path string) error {
 	} else {
 		if strings.Count(destinationPath, ".jpg") != 1 {
 			return errors.New("Dodge filename " + destinationPath)
-		} else {			
+		} else {
 			return CopyFile(sourcePath, destinationPath)
 		}
 	}
@@ -103,7 +99,7 @@ func CopyCoverArt(album *Album, path string) error {
 func MoveTracks(sourcePath, destinationPath string) error {
 	contentsFileInfos, err := ioutil.ReadDir(sourcePath)
 	if err == nil {
-		for _, fileInfo := range contentsFileInfos {	
+		for _, fileInfo := range contentsFileInfos {
 			sourceFile := filepath.Join(sourcePath, fileInfo.Name())
 			destFile := filepath.Join(destinationPath, fileInfo.Name())
 			err := os.Rename(sourceFile, destFile)
@@ -121,14 +117,24 @@ func MoveTracks(sourcePath, destinationPath string) error {
 
 func (collection *Collection) Sanitise(db *sql.DB) {
 
-	failed := []string{}
+	goodly := 0
+	
 	for _, album := range collection.inDatabase {
 
-		
+		base := filepath.Join(`/library/music/`, album.location)
+
+		// does the location exist?
+		if _, err := os.Stat(base); os.IsNotExist(err) {
+			log.Printf("%s (%s) doesn't exist", album.location, album.id)
+		} else {
+			cover := filepath.Join(base, "cover.jpg")
+			if _, err := os.Stat(cover); os.IsNotExist(err) {
+				log.Printf("%s (%s) doesn't exist", cover, album.id)
+			} else {
+				goodly += 1
+
+			}
+		}
 	}
-
-	// for _, fail := range failed {
-	// 	log.Println("Failed to move: ", fail)
-	// }
-
+	log.Printf("%d albums are good", goodly)
 }

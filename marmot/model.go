@@ -46,8 +46,9 @@ const GOOD_MAP = 1
 const PROBLEM_MAP = 2
 const MAP_FAIL = 3
 
-func NewAlbumFromFilesystem(location string, title string, artists []string, genres []string) *Album {
+func NewAlbumFromFilesystem(id int64, location string, title string, artists []string, genres []string) *Album {
 	a := Album{}
+	a.id = fmt.Sprintf("%d",id)
 	a.name = title
 	a.artists = []*Artist{}
 	for _, artist := range artists {
