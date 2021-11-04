@@ -17,6 +17,7 @@ import (
 	//	"path/filepath"
 )
 
+
 func Prepare(db *sql.DB, preparePath string) {
 	// directory should be readable
 	_, err := ioutil.ReadDir(preparePath)

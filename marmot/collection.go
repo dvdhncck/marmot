@@ -7,6 +7,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -379,4 +380,16 @@ func (collection *Collection) WriteToDatabase(db *sql.DB) {
 	
 
 	log.Printf("Added %d new entries to database", len(collection.inFlight))
+}
+
+func ListGenres(db *sql.DB) {
+	PopulateGenreCache(db)
+	keys := make([]string, 0, len(genreCache))
+	for k := range genreCache {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		fmt.Println(key)
+	}
 }

@@ -21,10 +21,12 @@ var artistCache = make(map[string]int64)
 
 func Validate(db *sql.DB, path string) *Fails {
 
-	populateGenreCache(db)
-	populateArtistCache(db)
+	fails := NewFails(path)
 
 	log.Printf("Validating %s", path)
+
+	PopulateGenreCache(db)
+	populateArtistCache(db)
 
 	// path should either be a valid-album, or a directory containing 1+ valid-albums
 
@@ -34,8 +36,6 @@ func Validate(db *sql.DB, path string) *Fails {
 	//  3. contain a valid metadata json file
 	//  4. contain a plausible image file
 	//  5. contain 1 or more .mp3 files
-
-	fails := NewFails(path)
 
 	rootFileInfo, err := os.Stat(path)
 	if err == nil {
@@ -227,7 +227,7 @@ func validateGenre(fails *Fails, genre string) {
 	}
 }
 
-func populateGenreCache(db *sql.DB) {
+func PopulateGenreCache(db *sql.DB) {
 	rows, err := db.Query("SELECT ID, Name FROM Genre")
 	if err != nil {
 		log.Printf("Error querying genres: %s", err)
