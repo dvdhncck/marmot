@@ -23,10 +23,7 @@ func usage() {
 	os.Exit(0)
 }
 
-func HttpHandler(w http.ResponseWriter, r *http.Request) {
 
-	fmt.Fprintf(w, "Hello, there\n")
-}
 
 func GoForIt() {
 	db, err := sql.Open("mysql", "dave:dave@tcp(127.0.0.1:3306)/marmot")
@@ -39,8 +36,13 @@ func GoForIt() {
 
 	defer db.Close()
 
+	dbAwareHandler := &DbAwareHandler{db,`megabats`}
+
+	
 	if settings.server {
-		http.HandleFunc("/", HttpHandler)
+		http.HandleFunc("/playlist", dbAwareHandler.HandlePlaylist)
+		http.HandleFunc("/search", dbAwareHandler.HandleTextSearch)
+		http.HandleFunc("/genre", dbAwareHandler.HandleGenreSearch)
 		fmt.Println("Server started at port 8088")
 		log.Fatal(http.ListenAndServe(":8088", nil))
 		return

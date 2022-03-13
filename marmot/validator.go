@@ -141,13 +141,6 @@ func validateName(fails *Fails, path string) {
 	}
 */
 
-type metadata struct {
-	ID 		int64     `json:"id"`
-	Title   string    `json:"title"`
-	Genres  []string  `json:"genres"`
-	Artists []string  `json:"artists"`
-}
-
 func validateMetadata(fails *Fails, path string) {
 	expectedPath := filepath.Join(path, "meta.json")
 
@@ -158,7 +151,7 @@ func validateMetadata(fails *Fails, path string) {
 		return
 	}
 
-	metadata := metadata{}
+	metadata := Metadata{}
 	err = json.Unmarshal([]byte(file), &metadata)
 
 	if err != nil {

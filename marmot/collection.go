@@ -6,7 +6,6 @@ import (
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"log"
-	"os"
 	"sort"
 	"strings"
 )
@@ -58,9 +57,6 @@ func (collection *Collection) validate() {
 		if len(album.artists) == 0 {
 			log.Printf("Album %s missing artist(s)", album.id)
 		}
-		if album.mediaFolder == nil {
-			log.Printf("Album %s missing mediaFolder", album.id)
-		}
 	}
 }
 
@@ -77,45 +73,6 @@ func (collection *Collection) makeIdList() string {
 		i++
 	}
 	return `(` + strings.Join(keys, ",") + `)`
-}
-
-func (collection *Collection) getMediaFolders(db *sql.DB) int {
-	albumIdList := collection.makeIdList()
-	results, err := db.Query("SELECT AlbumID, ArchiveName, MountPoint, RootPath, FolderPath FROM MediaFolder WHERE MediaType=1 AND AlbumID IN " + albumIdList)
-	if err != nil {
-		panic(err.Error())
-	}
-	count := 0
-	albumId := ""
-	for results.Next() {
-		mediaFolder := MediaFolder{}
-
-		var archiveName sql.NullString // archiveName can be null
-
-		err := results.Scan(&albumId, &archiveName, &mediaFolder.mountPoint, &mediaFolder.rootPath, &mediaFolder.folderPath)
-
-		if archiveName.Valid {
-			mediaFolder.archiveName = archiveName.String
-		}
-
-		if err != nil {
-			panic(err.Error())
-		}
-
-		album := collection.getById(albumId)
-		if album == nil {
-			panic(err.Error())
-		}
-
-		if album.mediaFolder != nil {
-			log.Printf(`Multiple MediaFolder for Album ID %s`, albumId)
-		} else {
-			album.mediaFolder = &mediaFolder
-		}
-
-		count++
-	}
-	return count
 }
 
 func (collection *Collection) enrichArtistsForAlbum(db *sql.DB, album *Album) {
@@ -233,21 +190,6 @@ func (collection *Collection) getGenresForCollection(db *sql.DB) int {
 	return count
 }
 
-func (collection *Collection) WriteToJson(filename string) {
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	defer file.Close()
-	delimiter := "{\n"
-	for _, album := range collection.inDatabase {
-		fmt.Fprintf(file, "%s%s", delimiter, album.ToJson())
-		delimiter = ",\n"
-	}
-	fmt.Fprintf(file, "} /*x*/\n")
-}
-
 func (collection *Collection) Size() int {
 	if collection.inDatabase == nil {
 		return 0
@@ -265,7 +207,6 @@ func (collection *Collection) UpdateNewLocation(albumId string, newLocation stri
 		return errors.New(`Unable to find album ` + albumId)
 	}
 	album.location = newLocation
-	album.clean = false
 	return nil // no error
 }
 
@@ -348,30 +289,6 @@ func (collection *Collection) addAlbumToDatabase(db *sql.DB, album *Album) {
 			log.Fatal(err.Error())
 		}
 	}
-}
-
-func (collection *Collection) WriteToDatabase(db *sql.DB) {
-
-	count := 0
-	for _, album := range collection.inDatabase {
-		if !album.clean {
-			_, err := maybeExecuteSql(db, "UPDATE Album SET Location=? WHERE ID=?", album.location, album.id)
-			if err != nil {
-				log.Fatal(err.Error())
-			}
-			count += 1
-			album.clean = true
-		}
-	}
-
-	log.Printf("Updated %d location entries in database", count)
-
-	for _, album := range collection.inFlight {
-		collection.addAlbumToDatabase(db, album)
-		InstallCoverArt(album)
-	}
-
-	log.Printf("Added %d new entries to database", len(collection.inFlight))
 }
 
 func ListGenres(db *sql.DB) {

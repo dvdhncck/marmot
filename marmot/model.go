@@ -2,20 +2,8 @@ package marmot
 
 import (
 	"fmt"
-	"strings"
+	"sort"
 )
-
-type MediaFolder struct {
-	archiveName string
-	mountPoint  string
-	rootPath    string
-	folderPath  string
-}
-
-func (mf *MediaFolder) ToJson() string {
-	return fmt.Sprintf("[\"%s/%s/%s\"]",
-		mf.mountPoint, mf.rootPath, mf.folderPath)
-}
 
 type Genre struct {
 	id     string
@@ -31,20 +19,45 @@ type Artist struct {
 type Album struct {
 	id          string
 	name        string
-	mapState    int
-	mediaFolder *MediaFolder
-	location    string          // this is where we will migrate it to
+	location    string 
 	sortAs      string
 	artists     []*Artist
 	genres      []*Genre
-
-	clean		bool            // if true, memory copy is believed to be in sync with database
 }
 
-const NO_CHANGE = 0
-const GOOD_MAP = 1
-const PROBLEM_MAP = 2
-const MAP_FAIL = 3
+type MinimalAlbum struct {
+	Id string         `json:"id"`        // primary key for subsequent searches
+	Location string   `json:"location"`  // sufficient to construct the cover image url
+}
+
+type Track struct {
+	Name    string    `json:"name"`
+	Artist  string    `json:"artist"`
+	File    string    `json:"file"`
+	Url     string    `json:"url"`
+}
+
+type Playlist struct {
+	AlbumID string    `json:"albumId"`
+	Title   string    `json:"title"`
+	Tracks  []*Track  `json:"tracks"`
+}
+
+type Metadata struct {
+	ID 		int64     `json:"id"`
+	Title   string    `json:"title"`
+	Genres  []string  `json:"genres"`
+	Artists []string  `json:"artists"`
+}
+
+func NewPlaylist(albumId string, title string, tracks []*Track) *Playlist {
+  p := Playlist{}
+  p.AlbumID = albumId
+  p.Title = title
+  p.Tracks = tracks
+  sort.Slice(p.Tracks, func (i,j int) bool { return tracks[i].File < tracks[j].File })
+  return &p
+}
 
 func NewAlbumFromFilesystem(id int64, location string, title string, artists []string, genres []string) *Album {
 	a := Album{}
@@ -59,26 +72,4 @@ func NewAlbumFromFilesystem(id int64, location string, title string, artists []s
 	}
 	a.location = location
 	return &a
-}
-
-func NewAlbumFromDatabase(folderPath string) *Album {
-	a := Album{}
-	a.mediaFolder = &MediaFolder{}
-	a.mediaFolder.folderPath = folderPath
-	return &a
-}
-
-func (album *Album) GetOldLocation() *MediaFolder { return album.mediaFolder }
-
-func (album *Album) ToJson() string {
-	artists := []string{}
-	for _, artist := range album.artists {
-		artists = append(artists, fmt.Sprintf("\"%s\"", artist.name))
-	}
-	genres := []string{}
-	for _, genre := range album.genres {
-		genres = append(genres, fmt.Sprintf("\"%s\"", genre))
-	}
-	return fmt.Sprintf("{ id: \"%s\",\n  name: \"%s\",\n  oldLocation: %s,\n  newLocation: %s,\n  sortAs: \"%s\",\n  genres: [%s]\n  artists: [%s]\n}",
-		album.id, album.name, album.mediaFolder.ToJson(), album.location, album.sortAs, strings.Join(genres, `,`), strings.Join(artists, `,`))
 }

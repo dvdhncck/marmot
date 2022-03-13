@@ -4,19 +4,13 @@ import (
 	"bufio"
 	"database/sql"
 	"fmt"
-
-	//	"encoding/json"
 	"path"
 	"path/filepath"
-
-	//	"github.com/disintegration/imaging"
 	"io/ioutil"
 	"log"
 	"os"
 	"strings"
-	//	"path/filepath"
 )
-
 
 func Prepare(db *sql.DB, preparePath string) {
 	// directory should be readable

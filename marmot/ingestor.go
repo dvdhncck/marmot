@@ -45,10 +45,10 @@ func IngestPath(db *sql.DB, path string) {
 	expectedPath := filepath.Join(path, "meta.json")
 
 	file, _ := ioutil.ReadFile(expectedPath)
-	metadata := metadata{}
+	metadata := Metadata{}
 	_ = json.Unmarshal([]byte(file), &metadata)
 
-	// we've alfready checked that its rooted correctly inder the music directory structure
+	// we've already checked that it is rooted correctly under the music directory structure
 	
 	actualLocation := filepath.Base(path)
 
