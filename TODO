@@ -1,1 +1,8 @@
 - Marmot prepare should suggest genres based on artist, or provided a command line way to pick common ones
+
+- marmot ingest . should figure out relative path
+      (done?, think so....)
+      
+- marmot help should be helpful
+
+- marmot info should show known data about target

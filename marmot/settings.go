@@ -4,12 +4,8 @@ import (
 	"flag"
 )
 
-/*
-
-
-*/
-
 type Settings struct {
+	server  bool
 	dryRun  bool
 	verbose bool
 	command []string
@@ -21,6 +17,8 @@ var settings = Settings{}
 func ParseArguments() {
 
 	flag.BoolVar(&settings.verbose, "verbose", false, "be verbose")
+
+	flag.BoolVar(&settings.server, "server", false, "run as server")
 
 	flag.BoolVar(&settings.dryRun, "dryRun", false, "don't affect anything")
 
@@ -41,10 +39,3 @@ func (s *Settings) HasToken() bool {
 	return len(s.command) > 0
 }
 
-func (s *Settings) ExportFileName() string {
-	return `marmot.xlsx`
-}
-
-func (s *Settings) ImportFileName() string {
-	return `marmot.xlsx`
-}

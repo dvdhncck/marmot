@@ -88,7 +88,7 @@ func InstallCoverArt(album *Album) {
 
 func WriteToDatabase(db *sql.DB, album *Album) {
 
-	 _, err := MaybeExecute(db, 
+	 _, err := maybeExecuteSql(db, 
 		`INSERT INTO Album (ID, Name, Location) VALUES (?, ?, ?)`, 
 		album.id, album.name, album.location)
 	
@@ -98,7 +98,7 @@ func WriteToDatabase(db *sql.DB, album *Album) {
 
 	for _, genre := range album.genres {
 		if genreId, ok := genreCache[genre.name]; ok {
-			_, err := MaybeExecute(db, 
+			_, err := maybeExecuteSql(db, 
 				`INSERT INTO AlbumGenre (AlbumID, GenreID) VALUES (?, ?)`, 
 				album.id, genreId)
 			
@@ -117,7 +117,7 @@ func WriteToDatabase(db *sql.DB, album *Album) {
 			} 
 		}
 		
-		_, err := MaybeExecute(db, 
+		_, err := maybeExecuteSql(db, 
 				`INSERT INTO AlbumArtist (AlbumID, ArtistID) VALUES (?, ?)`, 
 				album.id, artistId)
 			
@@ -128,7 +128,7 @@ func WriteToDatabase(db *sql.DB, album *Album) {
 }
 
 func createArtist(db *sql.DB, artist *Artist) (int64, error) {
-	result, err := MaybeExecute(db, 
+	result, err := maybeExecuteSql(db, 
 		`INSERT INTO Artist (Name, SortAs) VALUES (?,?)`, 
 		artist.name, artist.name)
 	

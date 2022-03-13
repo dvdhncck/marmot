@@ -3,10 +3,11 @@ package marmot
 import (
 	"database/sql"
 	"fmt"
-	"path/filepath"
-	"log"
-    "os"
 	_ "github.com/go-sql-driver/mysql"
+	"log"
+	"net/http"
+	"os"
+	"path/filepath"
 )
 
 func resolvePath(unresolvedPath string) string {
@@ -14,16 +15,23 @@ func resolvePath(unresolvedPath string) string {
 	if err != nil {
 		log.Fatal(fmt.Sprintf("Error resolving path '%s' (%s)", unresolvedPath, err))
 	}
-	return resolvedPath	
+	return resolvedPath
 }
 
 func usage() {
-	log.Printf("Welcome to the marmot.\nCommands:\n  prepare {path}\n  validate {path}\n  ingest {path}\n  genre list\n  genre add {genre}\n")
+	log.Printf("Welcome to the marmot.\nCommands:\n  search  {query}\nprepare {path}\n  validate {path}\n  ingest {path}\n  genre list\n  genre add {genre}\n")
 	os.Exit(0)
+}
+
+func HttpHandler(w http.ResponseWriter, r *http.Request) {
+
+	fmt.Fprintf(w, "Hello, there\n")
 }
 
 func GoForIt() {
 	db, err := sql.Open("mysql", "dave:dave@tcp(127.0.0.1:3306)/marmot")
+
+	log.SetOutput(os.Stdout) // daemons should log to stdout
 
 	if err != nil {
 		panic(err.Error())
@@ -31,9 +39,14 @@ func GoForIt() {
 
 	defer db.Close()
 
-	collection := Collection{}
+	if settings.server {
+		http.HandleFunc("/", HttpHandler)
+		fmt.Println("Server started at port 8088")
+		log.Fatal(http.ListenAndServe(":8088", nil))
+		return
+	}
 
-	if ! settings.HasToken() {
+	if !settings.HasToken() {
 		usage()
 	}
 
@@ -42,34 +55,6 @@ func GoForIt() {
 		token := settings.NextToken()
 
 		switch token {
-		case `db_import`:
-			count := collection.LoadFromDatabase(db, ``)
-			collection.getMediaFolders(db)
-			collection.getArtistsForCollection(db)
-			collection.getGenresForCollection(db)
-			collection.validate()
-			log.Printf("Imported %d albums from database", count)
-
-		case `db_export`:
-			collection.WriteToDatabase(db)
-
-		case `excel_import`:
-			ExcelRead(settings.ImportFileName(), collection)
-			log.Printf("Read collection with %d items from %s", collection.Size(), settings.ImportFileName())
-
-		case `excel_export`:
-			ExcelWrite(settings.ExportFileName(), collection)
-			log.Printf("Wrote collection to %s", settings.ExportFileName())
-
-		case `remap_locations`:
-			collection.RemapLocations()
-
-		case `sanitise`:
-			collection.Sanitise(db)
-
-		case `translocate`:
-			collection.Translocate(db)
-
 		case `genre`:
 			if settings.HasToken() {
 				action := settings.NextToken()
@@ -115,7 +100,7 @@ func GoForIt() {
 				} else {
 					fails.Write()
 				}
-				
+
 			} else {
 				log.Fatal("Expected path after 'validate'")
 			}
@@ -124,6 +109,5 @@ func GoForIt() {
 			usage()
 		}
 
-		
 	}
 }
