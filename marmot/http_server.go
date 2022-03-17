@@ -15,8 +15,23 @@ import (
 )
 
 type DbAwareHandler struct {
-	db          *sql.DB
-	randomState string
+	db       *sql.DB
+	genreMap *map[string]string
+}
+
+func NewDbAwareHandler(db *sql.DB) *DbAwareHandler {
+	genreMap := make(map[string]string, 10)
+	genreMap[`CLASSIC`] = `24)`
+	genreMap[`SOUNDTRACK`] = `34`
+	genreMap[`WORLD`] = `30,32,33`
+	genreMap[`JAZZ`] = `11,29,20,1`
+	genreMap[`POP`] = `16`
+	genreMap[`ROCKS`] = `27`
+	genreMap[`BEATS`] = `18,40,26,31,41`
+	genreMap[`BLEEPS`] = `44,42,17`
+	genreMap[`RANDOM`] = `24,34,30,32,33,11,29,20,1,16,27,18,40,26,31,41,44,42,17`
+
+	return &DbAwareHandler{db, &genreMap}
 }
 
 func (dbAwareHandler *DbAwareHandler) HandlePlaylist(w http.ResponseWriter, r *http.Request) {
@@ -40,7 +55,14 @@ func (dbAwareHandler *DbAwareHandler) HandleTextSearch(w http.ResponseWriter, r 
 	keys, ok := r.URL.Query()["q"]
 	if ok {
 		key := keys[0]
-		fmt.Fprintf(w, "Hello %s!\n", key)
+		albums, err := dbAwareHandler.getAlbumIdsForText(key)
+		if err == nil {
+			json, err := json.Marshal(albums)
+			if err == nil {
+				fmt.Fprintf(w, "%v\n", string(json))
+				return
+			}
+		}
 	} else {
 		w.WriteHeader(http.StatusBadRequest)
 	}
@@ -49,7 +71,7 @@ func (dbAwareHandler *DbAwareHandler) HandleTextSearch(w http.ResponseWriter, r 
 func (dbAwareHandler *DbAwareHandler) HandleGenreSearch(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["q"]
 	if ok {
-		key := keys[0]		
+		key := keys[0]
 		albums, err := dbAwareHandler.getAlbumIdsForGenre(key)
 		if err == nil {
 			json, err := json.Marshal(albums)
@@ -63,18 +85,20 @@ func (dbAwareHandler *DbAwareHandler) HandleGenreSearch(w http.ResponseWriter, r
 	}
 }
 
-func (dbAwareHandler *DbAwareHandler) getAlbumIdsForGenre(genre string) ([]*MinimalAlbum, error) {
+func (dbAwareHandler *DbAwareHandler) getAlbumIdsForText(text string) ([]*MinimalAlbum, error) {
 	result := make([]*MinimalAlbum, 0)
 
-	sql := ``
-	if genre == `NEW` {
-		sql = `SELECT ID,Location FROM Album WHERE ID IN (SELECT * FROM (SELECT ID FROM Album ORDER BY ID DESC LIMIT 50) AS fudge) ORDER BY rand()`
-	} else {
-		sql = ``
-	}
-
-	results, err := dbAwareHandler.db.Query(sql)
+	pattern:= `%` + text + `%`
+	sql := `SELECT DISTINCT(al.Id),al.Location FROM Album AS al
+	        LEFT JOIN AlbumArtist AS aa ON aa.AlbumID=al.id
+	        LEFT JOIN Artist AS ar ON aa.ArtistID = ar.ID
+	        WHERE al.Name LIKE ? OR ar.Name LIKE ?
+	        ORDER BY RAND()`
+	
+	results, err := dbAwareHandler.db.Query(sql, pattern, pattern)
 	if err != nil {
+		log.Println(fmt.Sprintf("fail %s", err))
+
 		return result, err
 	}
 
@@ -82,6 +106,50 @@ func (dbAwareHandler *DbAwareHandler) getAlbumIdsForGenre(genre string) ([]*Mini
 	var location string
 
 	for results.Next() {
+		log.Println("row!")
+
+		err = results.Scan(&albumId, &location)
+		if err != nil {
+			return result, err
+		}
+		result = append(result, &MinimalAlbum{albumId, location})
+	}
+
+	return result, nil
+}
+
+func (dbAwareHandler *DbAwareHandler) getAlbumIdsForGenre(genre string) ([]*MinimalAlbum, error) {
+	result := make([]*MinimalAlbum, 0)
+
+	sql := ``
+	queryArgs := make([]interface{}, 0)
+
+	if genre == `NEW` {
+		// MySQl (circa 2021) doesn't support LIMIT in an inner query, hence fudge
+		sql = `SELECT ID,Location FROM Album WHERE ID IN (SELECT * FROM (SELECT ID FROM Album ORDER BY ID DESC LIMIT ?) AS fudge) ORDER BY rand()`
+		queryArgs = append(queryArgs, 50)
+	} else {
+		sql = `SELECT DISTINCT(al.Id),al.Location FROM Album AS al 
+			   LEFT JOIN AlbumGenre AS ag ON ag.AlbumID = al.Id
+		       WHERE ag.GenreId IN (?) ORDER BY RAND()`
+		queryArgs = append(queryArgs, (*dbAwareHandler.genreMap)[genre])
+	}
+	
+	log.Println(fmt.Sprintf("args %s", queryArgs))
+
+	results, err := dbAwareHandler.db.Query(sql, queryArgs...)
+	if err != nil {
+		log.Println(fmt.Sprintf("fail %s", err))
+
+		return result, err
+	}
+
+	var albumId string
+	var location string
+
+	for results.Next() {
+		log.Println("row!")
+
 		err = results.Scan(&albumId, &location)
 		if err != nil {
 			return result, err

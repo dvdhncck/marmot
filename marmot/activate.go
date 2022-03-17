@@ -36,9 +36,8 @@ func GoForIt() {
 
 	defer db.Close()
 
-	dbAwareHandler := &DbAwareHandler{db,`megabats`}
+	dbAwareHandler := NewDbAwareHandler(db)
 
-	
 	if settings.server {
 		http.HandleFunc("/playlist", dbAwareHandler.HandlePlaylist)
 		http.HandleFunc("/search", dbAwareHandler.HandleTextSearch)
