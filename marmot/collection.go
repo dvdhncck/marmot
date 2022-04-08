@@ -6,7 +6,6 @@ import (
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"log"
-	"sort"
 	"strings"
 )
 
@@ -288,17 +287,5 @@ func (collection *Collection) addAlbumToDatabase(db *sql.DB, album *Album) {
 		if err != nil {
 			log.Fatal(err.Error())
 		}
-	}
-}
-
-func ListGenres(db *sql.DB) {
-	PopulateGenreCache(db)
-	keys := make([]string, 0, len(genreCache))
-	for k := range genreCache {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		fmt.Println(key)
 	}
 }

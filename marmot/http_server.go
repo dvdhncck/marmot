@@ -1,5 +1,12 @@
 package marmot
 
+/*
+  albumId     anonomly
+  564         no id3 tags
+
+  http://skink.lan/music/jam_and_spoon__tripomatic_fairytales_2001/11_tripomatic_fairytales_2001.mp3
+
+*/
 import (
 	"database/sql"
 	"encoding/json"
@@ -8,33 +15,32 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-type DbAwareHandler struct {
-	db       *sql.DB
-	genreMap *map[string]string
+type HttpBitch struct {
+	genreButler *GenreButler
 }
 
-func NewDbAwareHandler(db *sql.DB) *DbAwareHandler {
-	genreMap := make(map[string]string, 10)
-	genreMap[`CLASSIC`] = `24)`
-	genreMap[`SOUNDTRACK`] = `34`
-	genreMap[`WORLD`] = `30,32,33`
-	genreMap[`JAZZ`] = `11,29,20,1`
-	genreMap[`POP`] = `16`
-	genreMap[`ROCKS`] = `27`
-	genreMap[`BEATS`] = `18,40,26,31,41`
-	genreMap[`BLEEPS`] = `44,42,17`
-	genreMap[`RANDOM`] = `24,34,30,32,33,11,29,20,1,16,27,18,40,26,31,41,44,42,17`
+func NewHttpBitch(genreButler *GenreButler) *HttpBitch {
+	// genreMap := make(map[string]string, 10)
+	// genreMap[`CLASSIC`] = `24)`
+	// genreMap[`SOUNDTRACK`] = `34`
+	// genreMap[`WORLD`] = `30,32,33`
+	// genreMap[`JAZZ`] = `11,29,20,1`
+	// genreMap[`POP`] = `16`
+	// genreMap[`ROCKS`] = `27`
+	// genreMap[`BEATS`] = `18,40,26,31,41`
+	// genreMap[`BLEEPS`] = `44,42,17`
+	// genreMap[`RANDOM`] = `24,34,30,32,33,11,29,20,1,16,27,18,40,26,31,41,44,42,17`
 
-	return &DbAwareHandler{db, &genreMap}
+	return &HttpBitch{genreButler}
 }
 
-func (dbAwareHandler *DbAwareHandler) HandlePlaylist(w http.ResponseWriter, r *http.Request) {
+func (dbAwareHandler *HttpBitch) HandlePlaylist(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	keys, ok := r.URL.Query()["q"]
 	if ok {
 		playlist, err := dbAwareHandler.albumIdToPlaylist(keys[0])
@@ -51,11 +57,12 @@ func (dbAwareHandler *DbAwareHandler) HandlePlaylist(w http.ResponseWriter, r *h
 	w.WriteHeader(http.StatusBadRequest)
 }
 
-func (dbAwareHandler *DbAwareHandler) HandleTextSearch(w http.ResponseWriter, r *http.Request) {
+func (dbAwareHandler *HttpBitch) HandleTextSearch(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	keys, ok := r.URL.Query()["q"]
 	if ok {
 		key := keys[0]
-		albums, err := dbAwareHandler.getAlbumIdsForText(key)
+		albums, err := dbAwareHandler.getAlbumsForText(key)
 		if err == nil {
 			json, err := json.Marshal(albums)
 			if err == nil {
@@ -68,11 +75,12 @@ func (dbAwareHandler *DbAwareHandler) HandleTextSearch(w http.ResponseWriter, r 
 	}
 }
 
-func (dbAwareHandler *DbAwareHandler) HandleGenreSearch(w http.ResponseWriter, r *http.Request) {
+func (dbAwareHandler *HttpBitch) HandleGenreSearch(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	keys, ok := r.URL.Query()["q"]
 	if ok {
 		key := keys[0]
-		albums, err := dbAwareHandler.getAlbumIdsForGenre(key)
+		albums, err := dbAwareHandler.getAlbumsForGenre(key)
 		if err == nil {
 			json, err := json.Marshal(albums)
 			if err == nil {
@@ -85,121 +93,170 @@ func (dbAwareHandler *DbAwareHandler) HandleGenreSearch(w http.ResponseWriter, r
 	}
 }
 
-func (dbAwareHandler *DbAwareHandler) getAlbumIdsForText(text string) ([]*MinimalAlbum, error) {
-	result := make([]*MinimalAlbum, 0)
+func (dbAwareHandler *HttpBitch) getAlbumByAlbumId(albumId string) (*AlbumMetadata, error) {
+	sql :=
+		`SELECT al.Location, al.Name, GROUP_CONCAT(ar.Name)
+		 FROM Album AS al 
+         LEFT JOIN AlbumArtist AS aa ON aa.AlbumID=al.ID 
+	     LEFT JOIN Artist AS ar ON aa.ArtistID=ar.ID 
+		 WHERE al.ID = ?
+		 GROUP BY al.Location, al.Name`
 
-	pattern:= `%` + text + `%`
-	sql := `SELECT DISTINCT(al.Id),al.Location FROM Album AS al
-	        LEFT JOIN AlbumArtist AS aa ON aa.AlbumID=al.id
-	        LEFT JOIN Artist AS ar ON aa.ArtistID = ar.ID
-	        WHERE al.Name LIKE ? OR ar.Name LIKE ?
-	        ORDER BY RAND()`
-	
-	results, err := dbAwareHandler.db.Query(sql, pattern, pattern)
-	if err != nil {
-		log.Println(fmt.Sprintf("fail %s", err))
+	results, err := dbAwareHandler.db.Query(sql, albumId)
+	if err == nil {
+		var location string
+		var title string
+		var artists string
 
-		return result, err
+		for results.Next() {
+			err = results.Scan(&location, &title, &artists)
+			if err == nil {
+				return &AlbumMetadata{albumId, location, title, artists}, nil
+			}
+		}
 	}
 
-	var albumId string
-	var location string
+	log.Println(fmt.Sprintf("fail %s", err))
+	return nil, err
+}
 
-	for results.Next() {
-		log.Println("row!")
+func (dbAwareHandler *DbAwareHandler) getAlbumsForText(text string) ([]*AlbumMetadata, error) {
+	result := make([]*AlbumMetadata, 0)
 
-		err = results.Scan(&albumId, &location)
+	if len(strings.TrimSpace(text)) > 0 {
+
+		// regex for start of line or start of word (i.e. prefixed by a non-word)
+		pattern := `(^|[:blank:])+` + text
+
+		sql :=
+			`SELECT al.ID, al.Location, al.Name, GROUP_CONCAT(ar.Name)
+			FROM Album AS al 
+			LEFT JOIN AlbumArtist AS aa ON aa.AlbumID=al.ID 
+			LEFT JOIN Artist AS ar ON aa.ArtistID=ar.ID 
+			WHERE al.Name REGEXP ? OR ar.Name REGEXP ?
+			GROUP BY al.ID, al.Location, al.Name`
+
+		results, err := dbAwareHandler.db.Query(sql, pattern, pattern)
 		if err != nil {
+			log.Println(fmt.Sprintf("fail %s", err))
+
 			return result, err
 		}
-		result = append(result, &MinimalAlbum{albumId, location})
+
+		var albumId string
+		var location string
+		var title string
+		var artists string
+
+		for results.Next() {
+			//log.Println("row!")
+
+			err = results.Scan(&albumId, &location, &title, &artists)
+			if err != nil {
+				return result, err
+			}
+
+			result = append(result, &AlbumMetadata{albumId, location, title, artists})
+		}
 	}
 
 	return result, nil
 }
 
-func (dbAwareHandler *DbAwareHandler) getAlbumIdsForGenre(genre string) ([]*MinimalAlbum, error) {
-	result := make([]*MinimalAlbum, 0)
+func (dbAwareHandler *DbAwareHandler) getAlbumsForGenre(genre string) ([]*AlbumMetadata, error) {
+	result := make([]*AlbumMetadata, 0)
 
-	sql := ``
-	queryArgs := make([]interface{}, 0)
+	innerSql := ``
 
 	if genre == `NEW` {
 		// MySQl (circa 2021) doesn't support LIMIT in an inner query, hence fudge
-		sql = `SELECT ID,Location FROM Album WHERE ID IN (SELECT * FROM (SELECT ID FROM Album ORDER BY ID DESC LIMIT ?) AS fudge) ORDER BY rand()`
-		queryArgs = append(queryArgs, 50)
+		innerSql = `SELECT ID FROM Album WHERE ID IN (SELECT * FROM (SELECT ID FROM Album ORDER BY ID DESC LIMIT 50) AS fudge)`
 	} else {
-		sql = `SELECT DISTINCT(al.Id),al.Location FROM Album AS al 
+		innerSql = `SELECT DISTINCT(al.Id) FROM Album AS al 
 			   LEFT JOIN AlbumGenre AS ag ON ag.AlbumID = al.Id
-		       WHERE ag.GenreId IN (?) ORDER BY RAND()`
-		queryArgs = append(queryArgs, (*dbAwareHandler.genreMap)[genre])
+		       WHERE ag.GenreId IN (` + (*dbAwareHandler.genreMap)[genre] + `)`
 	}
-	
-	log.Println(fmt.Sprintf("args %s", queryArgs))
 
-	results, err := dbAwareHandler.db.Query(sql, queryArgs...)
+	// GROUP_CONCAT collapses the artists, giving us a single row, other fields need to be GROUP BY
+
+	outerSql :=
+		`SELECT al.ID, al.Location, al.Name, GROUP_CONCAT(ar.Name)
+		 FROM Album AS al
+         LEFT JOIN AlbumArtist AS aa ON aa.AlbumID=al.ID
+	     LEFT JOIN Artist AS ar ON aa.ArtistID=ar.ID
+	     WHERE al.ID  IN (` + innerSql + `)
+		 GROUP BY al.ID, al.Location, al.Name
+		 ORDER BY RAND()`
+
+	
+	//log.Println(fmt.Sprintf("%v", outerSql))
+
+	results, err := dbAwareHandler.db.Query(outerSql)
 	if err != nil {
 		log.Println(fmt.Sprintf("fail %s", err))
-
 		return result, err
 	}
 
 	var albumId string
 	var location string
+	var title string
+	var artists string
 
 	for results.Next() {
-		log.Println("row!")
-
-		err = results.Scan(&albumId, &location)
+		err = results.Scan(&albumId, &location, &title, &artists)
 		if err != nil {
 			return result, err
 		}
-		result = append(result, &MinimalAlbum{albumId, location})
+
+		result = append(result, &AlbumMetadata{albumId, location, title, artists})
 	}
+
+	log.Println(fmt.Sprintf("%d rows for genre %s", len(result), genre))
 
 	return result, nil
 }
 
-func (dbAwareHandler *DbAwareHandler) albumIdToLocation(albumId string) (string, error) {
-	var location string
-
-	if err := dbAwareHandler.db.QueryRow("SELECT Location FROM Album WHERE ID=?", albumId).Scan(&location); err != nil {
-		if err == sql.ErrNoRows {
-			return ``, fmt.Errorf("unknown albumId '%v'", albumId)
-		}
-		return ``, fmt.Errorf("fail %v", err)
-	}
-	return filepath.Join(settings.rootPath, location), nil
-}
-
 func (dbAwareHandler *DbAwareHandler) albumIdToPlaylist(albumId string) (*Playlist, error) {
-	location, err := dbAwareHandler.albumIdToLocation(albumId)
-	//fmt.Printf("checking: %v\n", location)
-	tracks := []*Track{}
+	albumMetadata, err := dbAwareHandler.getAlbumByAlbumId(albumId)
+	fmt.Printf("checking: %v\n", albumMetadata)
 	if err == nil {
-		outputDirRead, err := os.Open(location)
+		albumBaseDir := filepath.Join(settings.rootPath, albumMetadata.Location)
+		outputDirRead, err := os.Open(albumBaseDir)
 		if err == nil {
 			trackFileInfos, err := outputDirRead.Readdir(0)
 			if err == nil {
-				for _, track := range trackFileInfos {
+				fmt.Printf("scanning tracks %v\n", trackFileInfos)
+				tracks := []*Track{}
+				for index, track := range trackFileInfos {
 					if strings.HasSuffix(strings.ToLower(track.Name()), ".mp3") {
-						filePath := filepath.Join(location, track.Name())
+						filePath := filepath.Join(albumBaseDir, track.Name())
 						handle, err := os.Open(filePath)
 						if err == nil {
 							tags, err := tag.ReadFrom(handle)
 							if err == nil {
-								url := url.PathEscape(filePath)
-								tracks = append(tracks, &Track{tags.Title(), tags.Artist(), track.Name(), url})
-								// fmt.Printf("track : %v\n", track)
-								// fmt.Printf("artist=%v\n", tags.Artist())
-								// fmt.Printf("title=%v\n", tags.Title())
+								number := index + 1
+								url := filepath.Join(`music`,albumMetadata.Location,track.Name())
+								title := resolveTitle(tags.Title(), number)
+								artist := tags.Artist()
+								tracks = append(tracks, &Track{number, title, artist, url})
 							}
 						}
 					}
 				}
-				return NewPlaylist(albumId, `thing`, tracks), nil
+				fmt.Printf("found: %v\n", tracks)
+				return NewPlaylist(albumMetadata, tracks), nil
 			}
 		}
 	}
+	log.Println(fmt.Sprintf("fail %s", err))
 	return &Playlist{}, err
+}
+
+func resolveTitle(id3tag string, trackNumber int) string {
+	trimmed := strings.TrimSpace(id3tag)
+	if len(trimmed) > 0 {
+		return trimmed
+	} else {
+		return fmt.Sprintf(`Track %d`, trackNumber)
+	}
 }

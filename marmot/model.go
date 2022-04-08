@@ -30,32 +30,38 @@ type MinimalAlbum struct {
 	Location string   `json:"location"`  // sufficient to construct the cover image url
 }
 
+type AlbumMetadata struct {
+	Id string         `json:"id"`        // primary key for subsequent searches
+	Location string   `json:"location"`  // sufficient to construct the cover image url
+	Title string      `json:"title"`
+	Artists string    `json:"artists"`
+}
+
 type Track struct {
-	Name    string    `json:"name"`
+	Number  int       `json:"number"`
+	Title   string    `json:"title"`
 	Artist  string    `json:"artist"`
-	File    string    `json:"file"`
 	Url     string    `json:"url"`
 }
 
 type Playlist struct {
-	AlbumID string    `json:"albumId"`
-	Title   string    `json:"title"`
-	Tracks  []*Track  `json:"tracks"`
+	AlbumMetadata *AlbumMetadata `json:"metadata"`
+	Tracks        []*Track       `json:"tracks"`
 }
 
 type Metadata struct {
 	ID 		int64     `json:"id"`
 	Title   string    `json:"title"`
 	Genres  []string  `json:"genres"`
+	GenrePaths  string  `json:"genrePaths"` // can be empty
 	Artists []string  `json:"artists"`
 }
 
-func NewPlaylist(albumId string, title string, tracks []*Track) *Playlist {
+func NewPlaylist(albumMetadata *AlbumMetadata, tracks []*Track) *Playlist {
   p := Playlist{}
-  p.AlbumID = albumId
-  p.Title = title
+  p.AlbumMetadata = albumMetadata
   p.Tracks = tracks
-  sort.Slice(p.Tracks, func (i,j int) bool { return tracks[i].File < tracks[j].File })
+  sort.Slice(p.Tracks, func (i,j int) bool { return tracks[i].Url < tracks[j].Url })
   return &p
 }
 

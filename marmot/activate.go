@@ -3,11 +3,12 @@ package marmot
 import (
 	"database/sql"
 	"fmt"
-	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 func resolvePath(unresolvedPath string) string {
@@ -23,8 +24,6 @@ func usage() {
 	os.Exit(0)
 }
 
-
-
 func GoForIt() {
 	db, err := sql.Open("mysql", "dave:dave@tcp(127.0.0.1:3306)/marmot")
 
@@ -36,15 +35,10 @@ func GoForIt() {
 
 	defer db.Close()
 
-	dbAwareHandler := NewDbAwareHandler(db)
+	genreButler := NewGenreButler()
 
 	if settings.server {
-		http.HandleFunc("/playlist", dbAwareHandler.HandlePlaylist)
-		http.HandleFunc("/search", dbAwareHandler.HandleTextSearch)
-		http.HandleFunc("/genre", dbAwareHandler.HandleGenreSearch)
-		fmt.Println("Server started at port 8088")
-		log.Fatal(http.ListenAndServe(":8088", nil))
-		return
+		genreButler.ScanLibrary()
 	}
 
 	if !settings.HasToken() {
@@ -58,17 +52,10 @@ func GoForIt() {
 		switch token {
 		case `genre`:
 			if settings.HasToken() {
-				action := settings.NextToken()
-				switch action {
-				case `list`:
-					ListGenres(db)
-				case `add`:
-					log.Fatal(`Genre action not implemented`)
-				default:
-					log.Fatal(`Unknown genre action: `, action)
-				}
+				genrePath := settings.NextToken()
+				genreButler.ListAlbumsByGenre(genrePath)
 			} else {
-				log.Fatal("Expected an action after 'genre'")
+				genreButler.ListAllGenres()
 			}
 
 		case `ingest`:
@@ -111,4 +98,15 @@ func GoForIt() {
 		}
 
 	}
+
+	if settings.server {
+		dbAwareHandler := NewDbAwareHandler(db, genreButler)
+		http.HandleFunc("/playlist", dbAwareHandler.HandlePlaylist)
+		http.HandleFunc("/search", dbAwareHandler.HandleTextSearch)
+		http.HandleFunc("/genre", dbAwareHandler.HandleGenreSearch)
+
+		fmt.Println("Server started at port 8088")
+		log.Fatal(http.ListenAndServe(":8088", nil))
+	}
+
 }
