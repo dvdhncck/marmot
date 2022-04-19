@@ -2,124 +2,33 @@ package marmot
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
 
-type GenrePath struct {
-	path string
+/*
+	[ 'a': []]
+*/
+
+
+func NewGenreButler() *GenreButler {
+	toings := make(map[string][]*Metadata, 2048)
+	froings := make(map[int64]*Metadata, 2048)
+	return &GenreButler{&toings, &froings, &GenreForestNode{``,make([]*GenreForestNode, 0)}}
 }
 
 type GenreButler struct {
-	albumCount       	int
-	counts           	*map[string]int
-	genrePathToAlbumsIds *map[string][]string	
-}
-
-/*
-
-album X has genre string:
-  search for "pop.modern" find
-
-
-  e.g.
-   won_karwai__in_the_mood_for_love
-    ["Sunday Afternoon","Classical","Soundtrack","Compilation"]
-
-
-      "X.Classical" : "X.Classical",
-      "X.Soundtrack" : "X.Soundtrack",
-	  "World.Brazilian" : "World.Brazilian",
-	  "World.African" : "World.African",
-	  "World.Latino" : "World.Latino",
-	  "World.Putumayo" : "World.Putumayo",
-	  "World.Hawaiian" : "World.Hawaiian",
-      "Jazz.Crooning" : "Jazz.Crooning",
-	  "Jazz.Modern" : "Jazz.Modern",
-	  "Jazz.40-50s" : "Jazz.40-50s",
-	  "Jazz.Easy Listening" : "Jazz.Easy Listening",
-	  "Jazz.Cocktail" : "Jazz.Cocktail",
-	  "Pop.60s" : "Pop.60s",
-	  "Pop.Modern" : "Pop.Modern",
-	  "Pop.Beck" : "Pop.Beck",
-      "Rock.Chart" : "Rock.Chart",
-	  "Rock.Hard" : "Rock.Hard",
-	  "Rock.US" : "Rock.US",
-	  "Beats.Techno" : "Beats.Techno",
-	  "Beats.Downtempo" : "Beats.Downtempo",
-	  "Beats.Drum & Bass" : "Beats.Drum & Bass",
-	  "Beats.Electro" : "Beats.Electro",
-	  "Beats.Turntablism" : "Beats.Turntablism",
-	  "Bleeps.Ambient" : "Bleeps.Ambient",
-	  "Bleeps.LoFi" : "Bleeps.LoFi",
-	  "Bleeps.Warp" : "Bleeps.Warp",
-	  "Bleeps.Electronica" : "Bleeps.Electronica",
-	  "Bleeps.Glitch" : "Bleeps.Glitch",
-	  "Dub.Reggae" : "Dub.Reggae",
-	  "Dub.On-u-Sound" : "Dub.On-u-Sound",
-	  "Dub.Perry" : "Dub.Perry",
-
-*/
-
-var genreMap = map[string]string{
-	"Classical":  "Classical",
-	"Soundtrack": "Soundtrack",
-	"Brazilian":  "World.Brazilian",
-	"African":    "World.African",
-	"Latino":     "World.Latino",
-	"Putumayo":   "World.Putumayo",
-	"Hawaiian":   "World.Hawaiian",
-	"Crooning":   "Jazz.Crooning",
-	//	"Modern":         "Jazz.Modern",
-	"40-50s":         "Jazz.40-50s",
-	"Easy Listening": "Jazz.Easy Listening",
-	"Cocktail":       "Jazz.Cocktail",
-	"Pop":            "Pop",
-	"World":          "World",
-
-	"60s": "Pop.60s",
-	//	"Modern":          "Pop.Modern",
-	"Beck":        "Pop.Beck",
-	"Chart":       "Rock.Chart",
-	"Techno":      "Beats.Techno",
-	"Downtempo":   "Beats.Downtempo",
-	"Drum & Bass": "Beats.Drum & Bass",
-	"Rap":         "Beats.Rap",
-	"Electro":     "Beats.Electro",
-	"Hip Hop":     "Beats.Hip Hop",
-	"Trip Hop":    "Beats.Trip-Hop",
-	"Turntablism": "Beats.Turntablism",
-	"Bleeps":      "Bleeps",
-	"Ambient":     "Bleeps.Ambient",
-	"LoFi":        "Bleeps.LoFi",
-	"Warp":        "Bleeps.Warp",
-	"Electronica": "Bleeps.Electronica",
-	"Glitch":      "Bleeps.Glitch",
-	"Dub":         "Dub",
-	"Reggae":      "Dub.Reggae",
-	"On-u-Sound":  "Dub.On-u-Sound",
-	"Perry":       "Dub.Perry",
-}
-
-func (genreButler *GenreButler) decodeGenres(genres []string) (string, error) {
-	mapped_genres := []string{}
-	for _, original_genre := range genres {
-		(*genreButler.counts)[original_genre] += 1
-
-		mapped_genre, exists := genreMap[original_genre]
-
-		if exists {
-			mapped_genres = append(mapped_genres, mapped_genre)
-		} else {
-			mapped_genres = append(mapped_genres, original_genre)
-		}
-	}
-	return strings.Join(mapped_genres, `,`), nil
+	genrePathToMetadataList *map[string][]*Metadata
+	albumIdToMetadata       *map[int64]*Metadata
+	genreForest             *GenreForestNode
 }
 
 func (genreButler *GenreButler) transformMetaFile(path string, info os.FileInfo, err error) error {
@@ -141,7 +50,7 @@ func (genreButler *GenreButler) transformMetaFile(path string, info os.FileInfo,
 			return err
 		}
 
-		metadata.GenrePaths, err = genreButler.decodeGenres(metadata.Genres)
+		// do whatever here
 
 		if err != nil {
 			return err
@@ -159,53 +68,187 @@ func (genreButler *GenreButler) transformMetaFile(path string, info os.FileInfo,
 		if err != nil {
 			return err
 		}
-
-		genreButler.albumCount += 1
-
 	}
 	return err
 }
 
-func (genreButler *GenreButler) assimilate(albumPath string, genrePath string)  {
+// a.b.c : newNode = child['a'] on genreForestNode, create if required
+//         recursive "update(newNode, 'b.c')"
 
-	existingAlbumPaths, exists := (*genreButler.genrePathToAlbumsIds)[genrePath]
-	if !exists {
-		existingAlbumPaths = []string{}
+func (genreButler *GenreButler) updateGenreForest(genreForestNode *GenreForestNode, genrePath string) {
+	// termination condition
+	if genrePath == `` {
+		return
 	}
-	(*genreButler.genrePathToAlbumsIds)[genrePath] = append(existingAlbumPaths, albumPath)
+	
+	var head string
+	var tail string
 
-	log.Println(fmt.Sprintf(">> %v %v", albumPath, genrePath))
+	index := strings.Index(genrePath, ".")
+
+	if index < 0 {
+		head = genrePath
+		tail = ``
+
+	} else {
+		head = genrePath[0:index]
+		tail = genrePath[index+1:]		
+	}
+
+	// already in children of node?
+	found := false
+	for _, child := range genreForestNode.Children {
+		if child.Name == head {
+			found = true
+			genreButler.updateGenreForest(child, tail)
+		}
+	}
+	// not in children, add it
+	if !found {
+		child := GenreForestNode{head, make([]*GenreForestNode, 0)}
+		genreForestNode.Children = append(genreForestNode.Children, &child)
+		genreButler.updateGenreForest(&child, tail)
+	}
 }
 
-func (genreButler *GenreButler) gatherMetaData(albumPath string, info os.FileInfo, err error) error {
+func (genreButler *GenreButler) assimilate(libraryPath string, metadata *Metadata) {
+
+	genrePathList := strings.Split(metadata.GenrePaths, ",")
+
+	for _, genrePath := range genrePathList {
+
+		list, exists := (*genreButler.genrePathToMetadataList)[genrePath]
+		if !exists {
+			list = []*Metadata{}
+		}
+
+		genreButler.updateGenreForest(genreButler.genreForest, genrePath)
+
+		(*genreButler.genrePathToMetadataList)[genrePath] = append(list, metadata)
+
+		//log.Println(fmt.Sprintf(">> %v %v", libraryPath, genrePath))
+	}
+
+	(*genreButler.albumIdToMetadata)[metadata.ID] = metadata
+}
+
+func (genreButler *GenreButler) gatherMetaData(metaFilePath string, info os.FileInfo, err error) error {
 	if err == nil {
-		if !info.IsDir() && filepath.Base(albumPath) == `meta.json` {
-			//log.Println(path)
-
-			data, err := ioutil.ReadFile(albumPath)
-
+		if !info.IsDir() && filepath.Base(metaFilePath) == `meta.json` {
+			data, err := ioutil.ReadFile(metaFilePath)
 			if err == nil {
-
 				metadata := Metadata{}
 				err = json.Unmarshal([]byte(data), &metadata)
-				
 				if err == nil {
 					// get root folder for file
-					rootAlbumPath := filepath.Dir(albumPath)	
+					rootAlbumPath := filepath.Dir(metaFilePath)
 
-					genrePathList := strings.Split(metadata.GenrePaths, ",")
+					// if metadata.Location != rootAlbumPath {
+					// 	log.Println(fmt.Sprintf("WARN: incorrect metadata.Location - is %v, should be %v", metadata.Location, rootAlbumPath))
+					// }
 
-					for _, genrePath := range genrePathList {
-						genreButler.assimilate(rootAlbumPath, genrePath)
-					}
+					metadata.Location = rootAlbumPath // auto-fix location (not permnanently though)
+					metadata.UrlBase = strings.Replace(rootAlbumPath, `/library`, ``, 1)
 
+					genreButler.assimilate(rootAlbumPath, &metadata)
 				}
-
-				genreButler.albumCount += 1
 			}
 		}
 	}
 	return err
+}
+
+func (genreButler *GenreButler) GetRootGenres() []string {
+	var m map[string]bool = make(map[string]bool, 128)
+	
+	for candidate := range *genreButler.genrePathToMetadataList {
+		nodes := strings.Split(candidate, ".")
+		m[nodes[0]] = true
+	}
+	keys := []string{}
+	for k := range m {
+		keys = append(keys, k)
+	}
+
+	return keys
+}
+
+func (genreButler *GenreButler) GetSubGenres(genrePath string) []string {
+	var m map[string]bool = make(map[string]bool, 128)
+	
+	for candidate := range *genreButler.genrePathToMetadataList {
+		if candidate != genrePath {
+			if strings.HasPrefix(strings.ToLower(candidate), strings.ToLower(genrePath)) {
+				m[candidate] = true
+			}
+		}
+	}
+	keys := []string{}
+	for k := range m {
+		keys = append(keys, k)
+	}
+
+	return keys
+}
+
+func (genreButler *GenreButler) GetAlbumsForGenrePath(targetGenrePath string) ([]*Metadata, error) {
+	var result []*Metadata
+
+	if strings.ToLower(targetGenrePath) == `new` {
+		for _, metadata := range *genreButler.albumIdToMetadata {
+			result = append(result, metadata)
+		}
+		// sort by ID, highest first
+		sort.Slice(result, func(i, j int) bool { return result[i].ID > result[j].ID })
+		result = result[:50]
+
+	} else if strings.ToLower(targetGenrePath) == `random` {
+		result = make([]*Metadata, 0, len(*genreButler.albumIdToMetadata))
+		for _, metadata := range *genreButler.albumIdToMetadata {
+			if len(result) < 50 {
+				result = append(result, metadata)
+			}
+		}
+	} else {
+		for genrePath, list := range *genreButler.genrePathToMetadataList {
+			if strings.HasPrefix(strings.ToLower(genrePath), strings.ToLower(targetGenrePath)) {
+				for _, metadata := range list {
+					result = append(result, metadata)
+				}
+			}
+		}
+	}
+
+	//random shuffle
+	rand.Seed(time.Now().UnixNano())
+	for i := range result {
+		j := rand.Intn(i + 1)
+		result[i], result[j] = result[j], result[i]
+	}
+
+	return result, nil
+}
+
+func (genreButler *GenreButler) GetMetadata(albumId int64) (*Metadata, error) {
+	metadata, exists := (*genreButler.albumIdToMetadata)[albumId]
+	if exists {
+		return metadata, nil
+	} else {
+		return nil, errors.New(fmt.Sprintf("No metadata for album %v", albumId))
+	}
+}
+
+func (genreButler *GenreButler) GetAlbumsForText(text string) ([]*Metadata, error) {
+	var result []*Metadata
+
+	textL := strings.ToLower(text)
+	for _, metadata := range *genreButler.albumIdToMetadata {
+		if strings.Contains(strings.ToLower(metadata.Title), textL) || inStringSlice(metadata.Artists, textL) {
+			result = append(result, metadata)
+		}
+	}
+
+	return result, nil
 }
 
 func (genreButler *GenreButler) ScanLibrary() {
@@ -217,33 +260,55 @@ func (genreButler *GenreButler) ScanLibrary() {
 		log.Fatal(err)
 	}
 
-	log.Println(fmt.Sprintf("Visited %v albums in %v", genreButler.albumCount, time.Since(start)))
+	log.Println(fmt.Sprintf("Visited %v albums in %v", len(*genreButler.albumIdToMetadata), time.Since(start)))
 }
 
-
-func (genreButler *GenreButler) ListAllGenres() {
-	log.Println(fmt.Sprintf("Genre list:\n"))
-	
-	for genrePath, _ := range *genreButler.genrePathToAlbumsIds {
-		fmt.Printf("%v\n", genrePath)
-	}	
-}
 
 func (genreButler *GenreButler) ListAlbumsByGenre(targetGenrePath string) {
-	for genrePath, albumPaths := range *genreButler.genrePathToAlbumsIds {
-		 // if prefix
+	for genrePath, list := range *genreButler.genrePathToMetadataList {
 		if strings.HasPrefix(genrePath, targetGenrePath) {
 			fmt.Printf("%v\n", genrePath)
-			for _, albumPath := range albumPaths {
-				fmt.Printf("\t%v\n", albumPath)
+			for _, metadata := range list {
+				fmt.Printf("\t%v\n", metadata.Location)
 			}
 		}
-	}	
+	}
 }
 
-func NewGenreButler() *GenreButler {
-	doings := make(map[string][]string, 10)
-	counts := make(map[string]int)
-	genreButler := &GenreButler{0, &counts, &doings}
-	return genreButler
+func (genreButler *GenreButler) ListGenreForest() {
+	listGenreForest(genreButler.genreForest, ``)
+}
+
+func listGenreForest(genreForestNode *GenreForestNode, indent string) {
+	if len(genreForestNode.Name) > 0 { 
+		fmt.Printf("%s%s\n", indent, genreForestNode.Name)
+	}
+	for _, child := range genreForestNode.Children {
+		listGenreForest(child, indent + "  ")
+	}
+}
+
+func (genreButler *GenreButler) ListAllAlbums() {
+
+	var result []*Metadata
+	for _, metadata := range *genreButler.albumIdToMetadata {
+			result = append(result, metadata)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Location < result[j].Location })
+		
+	for _, metadata := range result {
+		genrePathList := strings.Split(metadata.GenrePaths, ",")
+		for _, genrePath := range genrePathList {
+			fmt.Printf("%v\t%v\n", metadata.Location, genrePath)
+		}
+	}
+}
+
+func inStringSlice(haystack []string, needle string) bool {
+	for _, hay := range haystack {
+		if strings.Contains(strings.ToLower(hay), needle) {
+			return true
+		}
+	}
+	return false
 }

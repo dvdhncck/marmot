@@ -36,14 +36,11 @@ func GoForIt() {
 	defer db.Close()
 
 	genreButler := NewGenreButler()
-
-	if settings.server {
-		genreButler.ScanLibrary()
-	}
-
-	if !settings.HasToken() {
-		usage()
-	}
+	genreButler.ScanLibrary()
+	
+	// if !settings.HasToken() {
+	// 	usage()
+	// }
 
 	for settings.HasToken() {
 
@@ -54,9 +51,18 @@ func GoForIt() {
 			if settings.HasToken() {
 				genrePath := settings.NextToken()
 				genreButler.ListAlbumsByGenre(genrePath)
+				
 			} else {
-				genreButler.ListAllGenres()
+				log.Fatal("Expected value for 'genre' parameter")
 			}
+
+		case `genres`:
+			genreButler.ListGenreForest()
+	
+
+		case `album`:
+			genreButler.ListAllAlbums()
+			
 
 		case `ingest`:
 			if settings.HasToken() {
@@ -100,10 +106,10 @@ func GoForIt() {
 	}
 
 	if settings.server {
-		dbAwareHandler := NewDbAwareHandler(db, genreButler)
-		http.HandleFunc("/playlist", dbAwareHandler.HandlePlaylist)
-		http.HandleFunc("/search", dbAwareHandler.HandleTextSearch)
-		http.HandleFunc("/genre", dbAwareHandler.HandleGenreSearch)
+		httpBitch := NewHttpBitch(genreButler);
+		http.HandleFunc("/playlist", httpBitch.HandleGetPlaylist)
+		http.HandleFunc("/search", httpBitch.HandleSearchByText)
+		http.HandleFunc("/genre", httpBitch.HandleSearchByGenre)
 
 		fmt.Println("Server started at port 8088")
 		log.Fatal(http.ListenAndServe(":8088", nil))

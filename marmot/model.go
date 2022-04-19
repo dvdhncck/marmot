@@ -25,11 +25,13 @@ type Album struct {
 	genres      []*Genre
 }
 
+// DEPRECATED
 type MinimalAlbum struct {
 	Id string         `json:"id"`        // primary key for subsequent searches
 	Location string   `json:"location"`  // sufficient to construct the cover image url
 }
 
+// DEPRECATED
 type AlbumMetadata struct {
 	Id string         `json:"id"`        // primary key for subsequent searches
 	Location string   `json:"location"`  // sufficient to construct the cover image url
@@ -44,22 +46,29 @@ type Track struct {
 	Url     string    `json:"url"`
 }
 
-type Playlist struct {
-	AlbumMetadata *AlbumMetadata `json:"metadata"`
-	Tracks        []*Track       `json:"tracks"`
-}
-
 type Metadata struct {
-	ID 		int64     `json:"id"`
-	Title   string    `json:"title"`
-	Genres  []string  `json:"genres"`
+	ID 		int64       `json:"id"`
+	Title   string      `json:"title"`
+	Location string     `json:"location"`
+	UrlBase string      `json:"urlBase"`
+	Genres  []string    `json:"genres"`
 	GenrePaths  string  `json:"genrePaths"` // can be empty
-	Artists []string  `json:"artists"`
+	Artists []string    `json:"artists"`
 }
 
-func NewPlaylist(albumMetadata *AlbumMetadata, tracks []*Track) *Playlist {
+type Playlist struct {
+	Metadata  *Metadata  `json:"metadata"`
+	Tracks    []*Track   `json:"tracks"`
+}
+
+type GenreForestNode struct {
+	Name string                 `json:"name"`
+	Children []*GenreForestNode `json:"children"`
+}
+
+func NewPlaylist(metadata *Metadata, tracks []*Track) *Playlist {
   p := Playlist{}
-  p.AlbumMetadata = albumMetadata
+  p.Metadata = metadata
   p.Tracks = tracks
   sort.Slice(p.Tracks, func (i,j int) bool { return tracks[i].Url < tracks[j].Url })
   return &p
