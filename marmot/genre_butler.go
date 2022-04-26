@@ -229,7 +229,16 @@ func (genreButler *GenreButler) GetAlbumsForGenrePath(targetGenrePath string) ([
 	return result, nil
 }
 
-func (genreButler *GenreButler) GetMetadata(albumId int64) (*Metadata, error) {
+func (genreButler *GenreButler) GetMetadataByPath(path string) (*Metadata, error) {
+	for _, metadata := range *genreButler.albumIdToMetadata {
+		if path == metadata.Location {
+			return metadata, nil
+		}
+	}
+	return nil, errors.New(fmt.Sprintf("Unknown path %v", path))
+}
+
+func (genreButler *GenreButler) GetMetadataById(albumId int64) (*Metadata, error) {
 	metadata, exists := (*genreButler.albumIdToMetadata)[albumId]
 	if exists {
 		return metadata, nil

@@ -5,17 +5,20 @@ import (
 	"sort"
 )
 
+// DEPRECATED
 type Genre struct {
 	id     string
 	name   string
 }
 
+// DEPRECATED
 type Artist struct {
 	id     string
 	name   string
 	sortAs string
 }
 
+// DEPRECATED
 type Album struct {
 	id          string
 	name        string
@@ -66,7 +69,7 @@ type GenreForestNode struct {
 	Children []*GenreForestNode `json:"children"`
 }
 
-func NewPlaylist(metadata *Metadata, tracks []*Track) *Playlist {
+func DEPRECATED_NewPlaylist(metadata *Metadata, tracks []*Track) *Playlist {
   p := Playlist{}
   p.Metadata = metadata
   p.Tracks = tracks
@@ -74,7 +77,7 @@ func NewPlaylist(metadata *Metadata, tracks []*Track) *Playlist {
   return &p
 }
 
-func NewAlbumFromFilesystem(id int64, location string, title string, artists []string, genres []string) *Album {
+func DEPRECATED_NewAlbumFromFilesystem(id int64, location string, title string, artists []string, genres []string) *Album {
 	a := Album{}
 	a.id = fmt.Sprintf("%d",id)
 	a.name = title

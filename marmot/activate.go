@@ -101,15 +101,19 @@ func GoForIt() {
 
 		case `help`:
 			usage()
+
+		default:
+			
 		}
 
 	}
 
 	if settings.server {
-		httpBitch := NewHttpBitch(genreButler);
-		http.HandleFunc("/playlist", httpBitch.HandleGetPlaylist)
-		http.HandleFunc("/search", httpBitch.HandleSearchByText)
-		http.HandleFunc("/genre", httpBitch.HandleSearchByGenre)
+		httpMonkey := NewHttpMonkey(genreButler);
+		http.HandleFunc("/playlist", httpMonkey.HandleGetPlaylist)
+		http.HandleFunc("/search", httpMonkey.HandleSearchByText)
+		http.HandleFunc("/genre", httpMonkey.HandleSearchByGenre)
+		http.HandleFunc("/genres", httpMonkey.HandleGetGenres)
 
 		fmt.Println("Server started at port 8088")
 		log.Fatal(http.ListenAndServe(":8088", nil))
